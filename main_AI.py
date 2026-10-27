@@ -9001,81 +9001,180 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось добавить участника: {str(e)}")
 
-    # def normalize_region(self, region_name):
-    #     """
-    #     Заменяет 'область' на 'обл.' и другие типичные сокращения в названии региона.
-    #     """
-    #     if not region_name:
-    #         return region_name
-    #     # Заменяем 'область' на 'обл.' (с учётом пробелов и регистра)
-    #     region_name = region_name.replace(' область', ' обл.').replace('область', 'обл.')
-    #     # Дополнительные сокращения (опционально)
-    #     region_name = region_name.replace(' край', ' кр.').replace('край', 'кр.')
-    #     region_name = region_name.replace('г.', '').replace('г.', '')
-    #     return region_name
-
+    # def delete_player_from_table(self):
+    #     """Удаление выбранного участника с записью в таблицу Delete_player"""
+    #     selection = self.table_view.selectedIndexes()
+    #     if not selection:
+    #         QMessageBox.warning(self, "Ошибка", "Выберите участника для удаления")
+    #         return
+        
+    #     row = selection[0].row()
+        
+    #     # Получаем ID участника из модели
+    #     player_id = self.players_model.get_id(row)
+    #     if not player_id:
+    #         return
+        
+    #     # Получаем данные игрока для подтверждения
+    #     fio = self.players_model.get_fio(row)
+        
+    #     # Получаем полные данные игрока из таблицы Player
+    #     try:
+    #         player = Player.get_by_id(player_id)
+            
+    #         reply = QMessageBox.question(self, "Подтверждение", 
+    #                                     f"Удалить участника {fio}?\n\n"
+    #                                     f"Игрок будет перемещен в архив удаленных.\n"
+    #                                     f"Вы сможете восстановить его позже.",
+    #                                     QMessageBox.Yes | QMessageBox.No)
+            
+    #         if reply == QMessageBox.Yes:
+    #             # Создаем запись в таблице Delete_player
+    #             Delete_player.create(
+    #                 player=player.player,
+    #                 bday=player.bday,
+    #                 rank=player.rank,
+    #                 city=player.city,
+    #                 region=player.region,
+    #                 razryad=player.razryad,
+    #                 coach_id=player.coach_id,
+    #                 full_name=player.fio,
+    #                 title_id=self.current_title_id,
+    #                 pay_rejting=player.pay_rejting or "",
+    #                 comment=player.comment or "",
+    #                 patronymic_id=player.patronymic_id.id if player.patronymic_id else None,
+    #                 sex=player.sex
+    #             )
+                
+    #             # Удаляем игрока из таблицы Player
+    #             player.delete_instance()
+                
+    #             # Обновляем таблицу
+    #             self.load_participants_for_title()
+                
+    #             # Обновляем количество игроков
+    #             self.update_table_header()
+                
+    #             # Показываем сообщение с возможностью восстановления
+    #             QMessageBox.information(self, "Успех", 
+    #                                 f"Участник {fio} удален.\n"
+    #                                 f"Данные сохранены в архиве.\n"
+    #                                 f"Для восстановления используйте фильтр 'Удаленные'.")
+                
+    #     except Exception as e:
+    #         QMessageBox.critical(self, "Ошибка", f"Ошибка при удалении: {str(e)}")
+# =========== массовое удаление игроков ====
     def delete_player_from_table(self):
-        """Удаление выбранного участника с записью в таблицу Delete_player"""
+        """Массовое удаление выделенных участников с записью в архив Delete_player."""
         selection = self.table_view.selectedIndexes()
         if not selection:
-            QMessageBox.warning(self, "Ошибка", "Выберите участника для удаления")
+            QMessageBox.warning(self, "Ошибка", "Выберите участника(ов) для удаления")
             return
-        
-        row = selection[0].row()
-        
-        # Получаем ID участника из модели
-        player_id = self.players_model.get_id(row)
-        if not player_id:
+
+        # ---- 1) Собрать уникальные строки ----
+        rows = sorted({idx.row() for idx in selection})
+
+        # ---- 2) Собрать (player_id, fio) по каждой строке ----
+        to_delete = []
+        for row in rows:
+            pid = self.players_model.get_id(row)
+            if not pid:
+                continue
+            fio = self.players_model.get_fio(row)
+            to_delete.append((pid, fio))
+
+        if not to_delete:
+            QMessageBox.warning(self, "Ошибка", "Не удалось определить игроков для удаления")
             return
-        
-        # Получаем данные игрока для подтверждения
-        fio = self.players_model.get_fio(row)
-        
-        # Получаем полные данные игрока из таблицы Player
+
+        # ---- 3) Подтверждение ----
+        n = len(to_delete)
+        if n == 1:
+            header = f"Удалить участника {to_delete[0][1]}?"
+        else:
+            header = f"Удалить {n} участников?"
+
+        preview_lines = [f"• {fio}" for _, fio in to_delete[:15]]
+        if n > 15:
+            preview_lines.append(f"… и ещё {n - 15}")
+
+        reply = QMessageBox.question(
+            self, "Подтверждение",
+            f"{header}\n\n"
+            + "\n".join(preview_lines)
+            + "\n\nИгроки будут перемещены в архив удалённых.\n"
+              "Вы сможете восстановить их позже.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # ---- 4) Удаление в одной транзакции ----
+        deleted = 0
+        skipped = []          # (fio, reason)
         try:
-            player = Player.get_by_id(player_id)
-            
-            reply = QMessageBox.question(self, "Подтверждение", 
-                                        f"Удалить участника {fio}?\n\n"
-                                        f"Игрок будет перемещен в архив удаленных.\n"
-                                        f"Вы сможете восстановить его позже.",
-                                        QMessageBox.Yes | QMessageBox.No)
-            
-            if reply == QMessageBox.Yes:
-                # Создаем запись в таблице Delete_player
-                Delete_player.create(
-                    player=player.player,
-                    bday=player.bday,
-                    rank=player.rank,
-                    city=player.city,
-                    region=player.region,
-                    razryad=player.razryad,
-                    coach_id=player.coach_id,
-                    full_name=player.fio,
-                    title_id=self.current_title_id,
-                    pay_rejting=player.pay_rejting or "",
-                    comment=player.comment or "",
-                    patronymic_id=player.patronymic_id.id if player.patronymic_id else None,
-                    sex=player.sex
+            with db.atomic():
+                for pid, fio in to_delete:
+                    player = Player.get_or_none(Player.id == pid)
+                    if not player:
+                        skipped.append((fio, "не найден в players"))
+                        continue
+
+                    try:
+                        Delete_player.create(
+                            player=player.player,
+                            bday=player.bday,
+                            rank=player.rank,
+                            city=player.city,
+                            region=player.region,
+                            razryad=player.razryad,
+                            coach_id=player.coach_id,          # FK → Coach или None
+                            full_name=player.fio,
+                            title_id=self.current_title_id,
+                            pay_rejting=player.pay_rejting or "",
+                            comment=player.comment or "",
+                            patronymic_id=player.patronymic_id.id if player.patronymic_id else None,
+                            sex=player.sex,
+                        )
+                    except Exception as e:
+                        # если модель/БД не позволяет NULL в coach_id — фиксируем и пробрасываем дальше
+                        raise RuntimeError(
+                            f"Не удалось создать запись в архиве для «{fio}»: {e}"
+                        )
+
+                    player.delete_instance()
+                    deleted += 1
+
+            # ---- 5) Обновление UI ----
+            self.load_participants_for_title()
+            self.update_table_header()
+
+            # если включён фильтр «Удалённые» — обновить и его
+            if hasattr(self, 'btn_filter_deleted') and \
+               self.btn_filter_deleted is not None and \
+               self.btn_filter_deleted.isChecked():
+                try:
+                    self.load_deleted_players()
+                except Exception:
+                    pass
+
+            msg = f"Удалено участников: {deleted}"
+            if skipped:
+                msg += "\n\nПропущено:\n" + "\n".join(
+                    f"• {f} — {r}" for f, r in skipped[:10]
                 )
-                
-                # Удаляем игрока из таблицы Player
-                player.delete_instance()
-                
-                # Обновляем таблицу
-                self.load_participants_for_title()
-                
-                # Обновляем количество игроков
-                self.update_table_header()
-                
-                # Показываем сообщение с возможностью восстановления
-                QMessageBox.information(self, "Успех", 
-                                    f"Участник {fio} удален.\n"
-                                    f"Данные сохранены в архиве.\n"
-                                    f"Для восстановления используйте фильтр 'Удаленные'.")
-                
+                if len(skipped) > 10:
+                    msg += f"\n… и ещё {len(skipped) - 10}"
+            QMessageBox.information(self, "Успех", msg + "\n\nДля восстановления используйте фильтр «Удалённые».")
+
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка при удалении: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(
+                self, "Ошибка",
+                f"Удаление НЕ выполнено (транзакция откатана).\n\n{e}"
+            )
 
     def update_table_header(self):
         """Обновление заголовка таблицы с количеством игроков"""
