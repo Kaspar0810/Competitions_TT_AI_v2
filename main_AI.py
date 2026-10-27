@@ -9501,6 +9501,7 @@ class MainWindow(QMainWindow):
                 'kat_ref': "",
                 'secretary': "",
                 'kat_sec': "",
+                'gamer': "",
                 'vid_turnira': self.selected_tournament_type,
                 'tab_enabled': "1",
                 'multiregion': 0,

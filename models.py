@@ -29,7 +29,7 @@ class R_list_m(BaseModel):
     r_list = IntegerField()
     r_fname = CharField(50)
     r_bithday = DateField(20)
-    r_city = CharField(30)
+    r_city = CharField()
     r_region = CharField()
     r_district = CharField()
     class Meta:
@@ -41,7 +41,7 @@ class R_list_d(BaseModel):
     r_list = IntegerField()
     r_fname = CharField(50)
     r_bithday = DateField()
-    r_city = CharField(30)
+    r_city = CharField()
     r_region = CharField()
     r_district = CharField()
 
@@ -54,7 +54,7 @@ class R1_list_m(BaseModel):
     r1_list = IntegerField()
     r1_fname = CharField(50)
     r1_bithday = DateField()
-    r1_city = CharField(30)
+    r1_city = CharField()
     r1_region = CharField(100)
     r1_district = CharField()
     class Meta:
@@ -66,7 +66,7 @@ class R1_list_d(BaseModel):
     r1_list = IntegerField()
     r1_fname = CharField(50)
     r1_bithday = DateField()
-    r1_city = CharField(30)
+    r1_city = CharField()
     r1_region = CharField(100)
     r1_district = CharField()
     class Meta:
