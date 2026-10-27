@@ -9550,6 +9550,12 @@ class MainWindow(QMainWindow):
         edit_stages_action.triggered.connect(self.open_edit_stages_dialog)
         edit_menu.addAction(edit_stages_action)
 
+        edit_menu.addSeparator()
+
+        clear_deleted_action = QAction("🗑️ Очистить удалённых игроков", self)
+        clear_deleted_action.triggered.connect(self.open_clear_deleted_dialog)
+        edit_menu.addAction(clear_deleted_action)
+
         # Печать
         print_menu = menubar.addMenu("Печать")
         print_action = QAction("Предпросмотр", self)
@@ -13258,7 +13264,95 @@ class MainWindow(QMainWindow):
         except Exception as e:
             # progress.close()
             QMessageBox.critical(self, "Ошибка", f"Не удалось импортировать базу данных: {str(e)}")
+    # ==================== ОЧИСТКА УДАЛЁННЫХ ====================
+    def open_clear_deleted_dialog(self):
+        """Диалог очистки удалённых игроков с фильтром по соревнованиям."""
+        try:
+            total = Delete_player.select().count()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось прочитать delete_players:\n{e}")
+            return
 
+        if total == 0:
+            QMessageBox.information(
+                self, "Очистка удалённых",
+                "Архив удалённых игроков пуст — очищать нечего."
+            )
+            return
+
+        dlg = ClearDeletedDialog(self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        title_ids, delete_all = dlg.get_selection()
+
+        # подтверждение
+        if delete_all:
+            msg = f"Удалить ВСЕ записи из архива удалённых?\nВсего: {total} записей."
+        else:
+            if not title_ids:
+                QMessageBox.information(
+                    self, "Очистка удалённых",
+                    "Ни одно соревнование не выбрано — ничего не удалено."
+                )
+                return
+            # сколько будет удалено
+            try:
+                to_del = (Delete_player
+                          .select()
+                          .where(Delete_player.title_id.in_(title_ids))
+                          .count())
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Ошибка подсчёта:\n{e}")
+                return
+            if to_del == 0:
+                QMessageBox.information(
+                    self, "Очистка удалённых",
+                    "В выбранных соревнованиях нет удалённых игроков."
+                )
+                return
+            msg = (f"Удалить {to_del} записей из архива удалённых\n"
+                   f"по {len(title_ids)} выбранным соревнованиям?\n\n"
+                   f"Действие НЕОБРАТИМО.")
+
+        reply = QMessageBox.question(
+            self, "Подтверждение",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            with db.atomic():
+                if delete_all:
+                    deleted = Delete_player.delete().execute()
+                else:
+                    deleted = (Delete_player
+                               .delete()
+                               .where(Delete_player.title_id.in_(title_ids))
+                               .execute())
+
+            QMessageBox.information(
+                self, "Готово",
+                f"Удалено записей: {deleted}"
+            )
+
+            # если открыта вкладка участников в режиме архива — обновить
+            if hasattr(self, 'btn_filter_deleted') and \
+               self.btn_filter_deleted is not None and \
+               self.btn_filter_deleted.isChecked():
+                try:
+                    self.load_deleted_players()
+                except Exception:
+                    pass
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Ошибка", f"Не удалось очистить архив:\n{e}")
+    # ============================================================
     def open_competition(self):
         """Открыть существующее соревнование"""
         # Переключаемся на вкладку Титул, где отображаются все соревнования
@@ -32548,7 +32642,239 @@ class MainWindow(QMainWindow):
             ('LINEBELOW',     (0, 0), (0, 0), 0.5, colors.grey),
         ]))
         return inner
+#
+class ClearDeletedDialog(QDialog):
+    """
+    Диалог очистки архива удалённых игроков.
 
+    Слева — список соревнований, в которых есть удалённые записи,
+    с количеством удалённых. Справа — кнопки.
+    Возможен выбор «Все соревнования» (delete_all=True).
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Очистка удалённых игроков")
+        self.setModal(True)
+        self.setMinimumSize(720, 480)
+
+        self._delete_all = False
+        self._title_ids = []
+
+        self._init_ui()
+        self._load_data()
+
+    def _init_ui(self):
+        outer = QVBoxLayout(self)
+
+        title = QLabel("Выберите соревнования, для которых удалить архив игроков")
+        title.setStyleSheet("font-weight:bold; font-size:12px; padding:4px;")
+        outer.addWidget(title)
+
+        info = QLabel(
+            "Удаление записей из архива необратимо.\n"
+            "Восстановить игроков после очистки будет невозможно."
+        )
+        info.setStyleSheet("color:#a00; font-size:11px; padding:2px;")
+        outer.addWidget(info)
+
+        center = QHBoxLayout()
+
+        # ---- левая часть: список соревнований ----
+        left = QVBoxLayout()
+
+        filter_bar = QHBoxLayout()
+        filter_bar.addWidget(QLabel("Поиск:"))
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("по названию соревнования...")
+        self.search_edit.textChanged.connect(self._apply_filter)
+        filter_bar.addWidget(self.search_edit, 1)
+        left.addLayout(filter_bar)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QListWidget.NoSelection)
+        self.list_widget.setStyleSheet("""
+            QListWidget { font-size: 11px; }
+            QListWidget::item { padding: 4px; }
+        """)
+        left.addWidget(self.list_widget, 1)
+
+        select_btns = QHBoxLayout()
+        self.btn_select_all = QPushButton("Выбрать все")
+        self.btn_select_all.clicked.connect(lambda: self._set_all_checked(True))
+        self.btn_clear_sel = QPushButton("Снять выбор")
+        self.btn_clear_sel.clicked.connect(lambda: self._set_all_checked(False))
+        select_btns.addWidget(self.btn_select_all)
+        select_btns.addWidget(self.btn_clear_sel)
+        select_btns.addStretch()
+        left.addLayout(select_btns)
+
+        # «Удалить всё»
+        self.rb_all = QCheckBox("Удалить ВСЕ записи из архива (без фильтра)")
+        self.rb_all.stateChanged.connect(self._on_all_toggled)
+        left.addWidget(self.rb_all)
+
+        center.addLayout(left, 3)
+
+        # ---- правая часть: сводка ----
+        right = QVBoxLayout()
+        right.setContentsMargins(10, 0, 0, 0)
+
+        right.addWidget(QLabel("Сводка:"))
+        self.summary_label = QLabel("—")
+        self.summary_label.setStyleSheet(
+            "background:#f5f5f5; border:1px solid #ccc; padding:8px; "
+            "font-size:11px; min-width:220px;"
+        )
+        self.summary_label.setWordWrap(True)
+        right.addWidget(self.summary_label)
+        right.addStretch()
+
+        center.addLayout(right, 1)
+        outer.addLayout(center, 1)
+
+        # ---- кнопки внизу ----
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Очистить")
+        bb.button(QDialogButtonBox.Ok).setStyleSheet(
+            "background-color:#f44336; color:white; padding:6px 14px; font-weight:bold;"
+        )
+        bb.accepted.connect(self._on_accept)
+        bb.rejected.connect(self.reject)
+        outer.addWidget(bb)
+
+    # ------------------------------------------------------------------
+    def _load_data(self):
+        """
+        Загружает в список те соревнования, у которых есть записи
+        в Delete_player. Показывает количество.
+        """
+        self.list_widget.clear()
+
+        try:
+            # (title_id, count, name, sredi, vozrast, data_start)
+            from collections import Counter
+            counters = Counter()
+            rows = Delete_player.select(Delete_player.title_id)
+            for r in rows:
+                if r.title_id:
+                    counters[r.title_id.id] += 1
+
+            self._items = []  # список кортежей (title_id, name, count, sredi, vozrast)
+
+            # получаем Title для отображения
+            for title_id, cnt in counters.items():
+                t = Title.get_or_none(Title.id == title_id)
+                if not t:
+                    name = f"<соревнование {title_id} — удалено из titles>"
+                    sredi = ""
+                    vozrast = ""
+                else:
+                    name = t.name or "—"
+                    sredi = t.sredi or ""
+                    vozrast = t.vozrast or ""
+                self._items.append((title_id, name, cnt, sredi, vozrast))
+
+            # сортируем: по имени
+            self._items.sort(key=lambda x: x[1].lower())
+
+            for title_id, name, cnt, sredi, vozrast in self._items:
+                item = QListWidgetItem()
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)
+                extra = f" | {sredi} {vozrast}".strip()
+                item.setText(f"[{cnt}]  {name}{extra}")
+                item.setData(Qt.UserRole, title_id)
+                item.setData(Qt.UserRole + 1, cnt)
+                self.list_widget.addItem(item)
+
+            self._update_summary()
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить список:\n{e}")
+
+    def _apply_filter(self, text):
+        t = (text or "").lower().strip()
+        for i in range(self.list_widget.count()):
+            it = self.list_widget.item(i)
+            if not t:
+                it.setHidden(False)
+            else:
+                it.setHidden(t not in it.text().lower())
+
+    def _set_all_checked(self, checked):
+        state = Qt.Checked if checked else Qt.Unchecked
+        for i in range(self.list_widget.count()):
+            it = self.list_widget.item(i)
+            if not it.isHidden():
+                it.setCheckState(state)
+        self._update_summary()
+
+    def _on_all_toggled(self, state):
+        all_mode = (state == Qt.Checked)
+        # при «удалить всё» список блокируется
+        self.list_widget.setEnabled(not all_mode)
+        self.search_edit.setEnabled(not all_mode)
+        self.btn_select_all.setEnabled(not all_mode)
+        self.btn_clear_sel.setEnabled(not all_mode)
+        self._update_summary()
+
+    def _update_summary(self):
+        if self.rb_all.isChecked():
+            try:
+                total = Delete_player.select().count()
+            except Exception:
+                total = 0
+            self.summary_label.setText(
+                f"Режим: УДАЛИТЬ ВСЁ\n"
+                f"Всего записей в архиве: {total}"
+            )
+            return
+
+        checked_count = 0
+        titles_count = 0
+        for i in range(self.list_widget.count()):
+            it = self.list_widget.item(i)
+            if it.checkState() == Qt.Checked:
+                titles_count += 1
+                checked_count += int(it.data(Qt.UserRole + 1) or 0)
+
+        if titles_count == 0:
+            self.summary_label.setText("Ничего не выбрано")
+        else:
+            self.summary_label.setText(
+                f"Выбрано соревнований: {titles_count}\n"
+                f"Будет удалено записей: {checked_count}"
+            )
+
+    def _on_accept(self):
+        if self.rb_all.isChecked():
+            self._delete_all = True
+            self._title_ids = []
+            self.accept()
+            return
+
+        ids = []
+        for i in range(self.list_widget.count()):
+            it = self.list_widget.item(i)
+            if it.checkState() == Qt.Checked:
+                ids.append(int(it.data(Qt.UserRole)))
+
+        if not ids:
+            QMessageBox.warning(
+                self, "Ничего не выбрано",
+                "Отметьте хотя бы одно соревнование или включите «Удалить всё»."
+            )
+            return
+
+        self._delete_all = False
+        self._title_ids = ids
+        self.accept()
+
+    def get_selection(self):
+        """Возвращает (title_ids: list[int], delete_all: bool)."""
+        return self._title_ids, self._delete_all
 # ==================== ПЛАН перетакскивание матчей ====================
 class PlanMatchesList(QListWidget):
     """QListWidget с кастомным MIME для перетаскивания матчей в план."""
@@ -32576,7 +32902,6 @@ class PlanMatchesList(QListWidget):
         drag = QDrag(self)
         drag.setMimeData(mime)
         drag.exec_(Qt.CopyAction)
-
 # === old ===
 class PlanTable(QTableWidget):
     """
