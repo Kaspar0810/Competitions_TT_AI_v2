@@ -9504,9 +9504,6 @@ class MainWindow(QMainWindow):
                 'gamer': "",
                 'vid_turnira': self.selected_tournament_type,
                 'tab_enabled': "1",
-                'multiregion': 0,
-                'perenos': 0,
-                'otchestvo': 0,
                 'r_date': rating_date_str
             }
             
@@ -11013,9 +11010,6 @@ class MainWindow(QMainWindow):
                     kat_sec=self.new_comp_secretary_cat.currentText(),
                     vid_turnira=self.selected_tournament_type if hasattr(self, 'selected_tournament_type') else "Личные",
                     tab_enabled="Титул Участники Рейтинг Дополнительно",  # Сразу активируем вкладку Участники
-                    multiregion=0,
-                    perenos=0,
-                    otchestvo=0,
                     r_date=rating_date_str,
                     table_on_comp=4,
                     time_on_match=15
@@ -17165,7 +17159,7 @@ class MainWindow(QMainWindow):
 
             gamer = men_text if sex == 'M' else women_text
             # ========
-            otc = title.otchestvo if title.otchestvo else 0
+            # otc = title.otchestvo 
 
             short_name = title.short_name_comp if title.short_name_comp else title.name
             import re
@@ -17185,8 +17179,6 @@ class MainWindow(QMainWindow):
             
             for player in players_list:
                 place_text = f"{player.mesto} место"
-                # Формируем ФИО с отчеством или без
-                # if otc == 1:
                 patronymic_text = ""
                 if player.patronymic_id:
                     try:
@@ -17195,9 +17187,7 @@ class MainWindow(QMainWindow):
                     except:
                         pass
                 full_name = f"{player.player} {patronymic_text}".strip()
-                # else:
-                #     full_name = player.player
-                
+
                 # Форматируем дату рождения - ИСПРАВЛЕНО
                 birth_date = self.format_birth_date(player.bday)
                 
@@ -17395,8 +17385,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Ошибка", "Нет участников для экспорта")
                 return
 #=====================================            
-            # Получаем параметры
-            otc = title.otchestvo if title.otchestvo else 0
+            # # Получаем параметры
+            # otc = title.otchestvo if title.otchestvo else 0
                         
             # Подготовка данных для таблицы
             elements = []
@@ -17404,18 +17394,6 @@ class MainWindow(QMainWindow):
             
             for player in player_list:
                 n += 1
-                # Формируем ФИО с отчеством или без
-                # if otc == 1:
-                #     patronymic_text = ""
-                #     if player.patronymic_id:
-                #         try:
-                #             patronymic = Patronymic.get(Patronymic.id == player.patronymic_id)
-                #             patronymic_text = patronymic.patronymic
-                #         except:
-                #             pass
-                #     full_name = f"{player.player} {patronymic_text}".strip()
-                # else:
-                #     full_name = player.player
                 full_name = player.fio
                 
                 # Форматируем дату рождения - ИСПРАВЛЕНО
@@ -17964,7 +17942,7 @@ class MainWindow(QMainWindow):
                 gamer = women_text
                 sex = 'W'
             # ============
-            otc = title.otchestvo if title.otchestvo else 0
+            # otc = title.otchestvo if title.otchestvo else 0
 
             short_name = title.short_name_comp if title.short_name_comp else title.name
             import re
@@ -17985,17 +17963,17 @@ class MainWindow(QMainWindow):
             for player in players_list:
                 place_text = f"{player.mesto} место"
                 # Формируем ФИО с отчеством или без
-                if otc == 1:
-                    patronymic_text = ""
-                    if player.patronymic_id:
-                        try:
-                            patronymic = Patronymic.get(Patronymic.id == player.patronymic_id)
-                            patronymic_text = patronymic.patronymic
-                        except:
-                            pass
-                    full_name = f"{player.player} {patronymic_text}".strip()
-                else:
-                    full_name = player.player
+                # if otc == 1:
+                patronymic_text = ""
+                if player.patronymic_id:
+                    try:
+                        patronymic = Patronymic.get(Patronymic.id == player.patronymic_id)
+                        patronymic_text = patronymic.patronymic
+                    except:
+                        pass
+                full_name = f"{player.player} {patronymic_text}".strip()
+                # else:
+                #     full_name = player.player
                 
                 # Форматируем дату рождения - ИСПРАВЛЕНО
                 birth_date = self.format_birth_date(player.bday)
@@ -20644,133 +20622,302 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Проверка пар", "Все пары сетки не имеют конфликтов по региону и тренеру.")
 
 # ============= Сетки по олимпийской системе в PDF =========================================  
+    # def func_zagolovok(self, canvas, doc):
+    #     """создание заголовка страниц для PDF"""
+    #     pagesizeW = doc.width
+    #     pagesizeH = doc.height
+        
+    #     # Определяем ориентацию страницы
+    #     if pagesizeH > pagesizeW:
+    #         pv = A4
+    #     else:
+    #         pv = landscape(A4)
+    #     (width, height) = pv
+        
+    #     # Получаем данные о соревновании
+    #     if not hasattr(self, 'current_title_id') or not self.current_title_id:
+    #         return
+        
+    #     try:
+    #         title = Title.get(Title.id == self.current_title_id)
+            
+    #         nz = title.name if title.name else ""
+    #         ind = title.perenos if hasattr(title, 'perenos') else 0
+    #         ms = title.mesto if title.mesto else ""
+    #         sr = f"среди {title.sredi} {title.vozrast}" if title.sredi else ""
+            
+    #         # Формируем дату
+    #         data_comp = ""
+    #         if title.data_start:
+    #             data_comp = title.data_start.strftime("%d.%m.%Y")
+    #             if title.data_end and title.data_end != title.data_start:
+    #                 data_comp += f" - {title.data_end.strftime('%d.%m.%Y')}"
+            
+    #         # Определяем текущую вкладку
+    #         current_button = "0"
+    #         if hasattr(self, 'tab_widget'):
+    #             tb = self.tab_widget.currentIndex()
+            
+    #         canvas.saveState()
+            
+    #         # Устанавливаем шрифт (если DejaVu недоступен, используем Helvetica)
+    #         try:
+    #             canvas.setFont("DejaVuSerif-Italic", 11)
+    #         except:
+    #             canvas.setFont("Helvetica", 11)
+            
+    #         canvas.setFillColor(black)
+
+    #         # Центральный текст титула
+    #         if ind > 0 and pv == A4:
+    #             nz_list = nz.split()
+    #             if len(nz_list) > ind:
+    #                 word = nz_list[ind]
+    #                 s1 = nz.find(word) + len(word)
+    #                 strline1 = nz[:s1]
+    #                 strline2 = nz[s1 + 1:]
+    #                 canvas.drawCentredString(width / 2.0, height - 1.1 * cm, strline1)
+    #                 canvas.drawCentredString(width / 2.0, height - 1.5 * cm, strline2)
+    #                 try:
+    #                     canvas.setFont("DejaVuSerif-Italic", 11)
+    #                 except:
+    #                     canvas.setFont("Helvetica", 11)
+    #                 canvas.drawCentredString(width / 2.0, height - 1.9 * cm, sr)
+    #                 try:
+    #                     canvas.setFont("DejaVuSerif-Italic", 10)
+    #                 except:
+    #                     canvas.setFont("Helvetica", 10)
+    #             else:
+    #                 canvas.drawCentredString(width / 2.0, height - 1.1 * cm, nz)
+    #                 canvas.drawCentredString(width / 2.0, height - 1.5 * cm, sr)
+    #                 try:
+    #                     canvas.setFont("DejaVuSerif-Italic", 11)
+    #                 except:
+    #                     canvas.setFont("Helvetica", 11)
+    #         else:
+    #             canvas.drawCentredString(width / 2.0, height - 1.1 * cm, nz)
+    #             canvas.drawCentredString(width / 2.0, height - 1.5 * cm, sr)
+    #             try:
+    #                 canvas.setFont("DejaVuSerif-Italic", 11)
+    #             except:
+    #                 canvas.setFont("Helvetica", 11)
+            
+            
+
+    #         # Текст титула по основным
+    #         canvas.drawRightString(width - 1 * cm, height - 1.9 * cm, f"г. {ms}")
+    #         canvas.drawString(0.8 * cm, height - 1.9 * cm, data_comp)
+            
+    #         # Текст судейской коллегии
+    #         try:
+    #             canvas.setFont("DejaVuSerif-Italic", 10)
+    #         except:
+    #             canvas.setFont("Helvetica", 10)
+            
+    #         canvas.setFillColor(blue)
+            
+    #         if pv == landscape(A4):
+    #             main_referee_collegia = (f"Гл. судья: судья {title.kat_ref} ______________ {title.referee}   "
+    #                                     f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}")
+    #             if current_button == "3":
+    #                 canvas.drawCentredString(width / 2.0, height - 15 * cm, main_referee_collegia)
+    #             else:
+    #                 canvas.drawCentredString(width / 2.0, height - 20 * cm, main_referee_collegia)
+    #         else:
+    #             main_referee = f"Гл. судья: судья {title.kat_ref} ______________ {title.referee}"
+    #             if current_button == "1":
+    #                 canvas.drawString(2 * cm, 20 * cm, main_referee)
+    #             elif current_button == "2":
+    #                 # Сдвигает подпись судьи относительно количества регионов
+    #                 regions_list = []
+    #                 players = Player.select().where((Player.title_id == self.current_title_id) & (Player.sex == self.current_sex))
+    #                 for k in players:
+    #                     region = k.region
+    #                     if region:
+    #                         regions_list.append(region)
+    #                 regions_set = set(regions_list)
+    #                 count = len(regions_set)
+    #                 canvas.drawString(2 * cm, ((29 - count) * cm), main_referee)
+    #             else:
+    #                 main_secretary = f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}"
+    #                 canvas.drawString(2 * cm, 1.8 * cm, main_referee)
+    #                 canvas.drawString(2 * cm, 0.8 * cm, main_secretary)
+            
+    #         canvas.restoreState()
+            
+    #     except Exception as e:
+    #         print(f"Ошибка в func_zagolovok: {e}")
+    #         canvas.restoreState()
+# === новый вариант заголовка с авто переносом длинного названия ===
     def func_zagolovok(self, canvas, doc):
-        """создание заголовка страниц для PDF"""
+        """Создание заголовка страниц для PDF."""
         pagesizeW = doc.width
         pagesizeH = doc.height
-        
-        # Определяем ориентацию страницы
+
         if pagesizeH > pagesizeW:
             pv = A4
         else:
             pv = landscape(A4)
         (width, height) = pv
-        
-        # Получаем данные о соревновании
+
         if not hasattr(self, 'current_title_id') or not self.current_title_id:
             return
-        
+
         try:
             title = Title.get(Title.id == self.current_title_id)
-            
+
             nz = title.name if title.name else ""
-            ind = title.perenos if hasattr(title, 'perenos') else 0
             ms = title.mesto if title.mesto else ""
             sr = f"среди {title.sredi} {title.vozrast}" if title.sredi else ""
-            
-            # Формируем дату
+
             data_comp = ""
             if title.data_start:
                 data_comp = title.data_start.strftime("%d.%m.%Y")
                 if title.data_end and title.data_end != title.data_start:
                     data_comp += f" - {title.data_end.strftime('%d.%m.%Y')}"
-            
-            # Определяем текущую вкладку
+
             current_button = "0"
             if hasattr(self, 'tab_widget'):
-                tb = self.tab_widget.currentIndex()
-            
+                _tb = self.tab_widget.currentIndex()
+
             canvas.saveState()
-            
-            # Устанавливаем шрифт (если DejaVu недоступен, используем Helvetica)
+
+            # --- шрифт по умолчанию ---
+            font_name = "DejaVuSerif-Italic"
+            font_size = 11
             try:
-                canvas.setFont("DejaVuSerif-Italic", 11)
-            except:
-                canvas.setFont("Helvetica", 11)
-            
+                canvas.setFont(font_name, font_size)
+            except Exception:
+                font_name = "Helvetica"
+                font_size = 11
+                canvas.setFont(font_name, font_size)
+
             canvas.setFillColor(black)
 
-            # Центральный текст титула
-            if ind > 0 and pv == A4:
-                nz_list = nz.split()
-                if len(nz_list) > ind:
-                    word = nz_list[ind]
-                    s1 = nz.find(word) + len(word)
-                    strline1 = nz[:s1]
-                    strline2 = nz[s1 + 1:]
-                    canvas.drawCentredString(width / 2.0, height - 1.1 * cm, strline1)
-                    canvas.drawCentredString(width / 2.0, height - 1.5 * cm, strline2)
-                    try:
-                        canvas.setFont("DejaVuSerif-Italic", 11)
-                    except:
-                        canvas.setFont("Helvetica", 11)
-                    canvas.drawCentredString(width / 2.0, height - 1.9 * cm, sr)
-                    try:
-                        canvas.setFont("DejaVuSerif-Italic", 10)
-                    except:
-                        canvas.setFont("Helvetica", 10)
-                else:
-                    canvas.drawCentredString(width / 2.0, height - 1.1 * cm, nz)
-                    canvas.drawCentredString(width / 2.0, height - 1.5 * cm, sr)
-                    try:
-                        canvas.setFont("DejaVuSerif-Italic", 11)
-                    except:
-                        canvas.setFont("Helvetica", 11)
-            else:
-                canvas.drawCentredString(width / 2.0, height - 1.1 * cm, nz)
-                canvas.drawCentredString(width / 2.0, height - 1.5 * cm, sr)
-                try:
-                    canvas.setFont("DejaVuSerif-Italic", 11)
-                except:
-                    canvas.setFont("Helvetica", 11)
-            
-            
+            line_step = 0.4 * cm
+            y = height - 1.1 * cm
 
-            # Текст титула по основным
-            canvas.drawRightString(width - 1 * cm, height - 1.9 * cm, f"г. {ms}")
-            canvas.drawString(0.8 * cm, height - 1.9 * cm, data_comp)
-            
-            # Текст судейской коллегии
+            # --- название: 1 или 2 строки ---
+            max_text_width = width - 2 * cm
+            title_lines = self._split_long_title(
+                canvas, nz, max_text_width, font_name, font_size
+            )
+
+            for i, line in enumerate(title_lines):
+                canvas.drawCentredString(width / 2.0, y, line)
+                if i < len(title_lines) - 1:
+                    y -= line_step
+
+            # --- строка «среди …» ---
+            y -= line_step
+            if sr:
+                canvas.drawCentredString(width / 2.0, y, sr)
+
+            # --- строка «дата … место» ---
+            y -= line_step
+            if ms:
+                canvas.drawRightString(width - 1 * cm, y, f"г. {ms}")
+            if data_comp:
+                canvas.drawString(0.8 * cm, y, data_comp)
+
+            # --- судейская коллегия ---
             try:
                 canvas.setFont("DejaVuSerif-Italic", 10)
-            except:
+            except Exception:
                 canvas.setFont("Helvetica", 10)
-            
+
             canvas.setFillColor(blue)
-            
+
             if pv == landscape(A4):
-                main_referee_collegia = (f"Гл. судья: судья {title.kat_ref} ______________ {title.referee}   "
-                                        f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}")
+                main_referee_collegia = (
+                    f"Гл. судья: судья {title.kat_ref} ______________ {title.referee}   "
+                    f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}"
+                )
                 if current_button == "3":
                     canvas.drawCentredString(width / 2.0, height - 15 * cm, main_referee_collegia)
                 else:
                     canvas.drawCentredString(width / 2.0, height - 20 * cm, main_referee_collegia)
             else:
                 main_referee = f"Гл. судья: судья {title.kat_ref} ______________ {title.referee}"
+                main_secretary = f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}"
                 if current_button == "1":
                     canvas.drawString(2 * cm, 20 * cm, main_referee)
                 elif current_button == "2":
-                    # Сдвигает подпись судьи относительно количества регионов
-                    regions_list = []
-                    players = Player.select().where((Player.title_id == self.current_title_id) & (Player.sex == self.current_sex))
-                    for k in players:
-                        region = k.region
-                        if region:
-                            regions_list.append(region)
-                    regions_set = set(regions_list)
-                    count = len(regions_set)
-                    canvas.drawString(2 * cm, ((29 - count) * cm), main_referee)
+                    # смещение по числу регионов, чтобы не наползало на таблицу
+                    try:
+                        regions_set = set()
+                        players = Player.select().where(
+                            (Player.title_id == self.current_title_id) &
+                            (Player.sex == self.current_sex)
+                        )
+                        for k in players:
+                            if k.region:
+                                regions_set.add(k.region)
+                        count = len(regions_set)
+                    except Exception:
+                        count = 0
+                    canvas.drawString(2 * cm, (29 - count) * cm, main_referee)
                 else:
-                    main_secretary = f"Гл. секретарь: судья {title.kat_sec} ______________ {title.secretary}"
                     canvas.drawString(2 * cm, 1.8 * cm, main_referee)
                     canvas.drawString(2 * cm, 0.8 * cm, main_secretary)
-            
-            canvas.restoreState()
-            
-        except Exception as e:
-            print(f"Ошибка в func_zagolovok: {e}")
+
             canvas.restoreState()
 
+        except Exception as e:
+            print(f"Ошибка в func_zagolovok: {e}")
+            try:
+                canvas.restoreState()
+            except Exception:
+                pass
+
+    def _split_long_title(self, canvas, text, max_width, font_name, font_size):
+        """
+        Разбивает строку на 1 или 2 строки так, чтобы каждая
+        укладывалась в max_width (в точках PDF).
+        Возвращает список строк.
+        """
+        if not text:
+            return [""]
+
+        # влезает в одну строку?
+        if canvas.stringWidth(text, font_name, font_size) <= max_width:
+            return [text]
+
+        words = text.split()
+        if len(words) < 2:
+            return [text]  # одно слово — резать не по чему
+
+        # ищем точку разбиения, где обе строки укладываются,
+        # и разница длин минимальна (лучший баланс)
+        best_i = len(words) // 2
+        best_diff = None
+        fallback_i = best_i
+        fallback_diff = None
+
+        for i in range(1, len(words)):
+            l1 = " ".join(words[:i])
+            l2 = " ".join(words[i:])
+            w1 = canvas.stringWidth(l1, font_name, font_size)
+            w2 = canvas.stringWidth(l2, font_name, font_size)
+
+            if w1 <= max_width and w2 <= max_width:
+                diff = abs(w1 - w2)
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    best_i = i
+            else:
+                # на случай, если ни одна точка не даёт обе строки в лимите —
+                # запоминаем «наименее плохой» вариант
+                over = max(0, w1 - max_width) + max(0, w2 - max_width)
+                if fallback_diff is None or over < fallback_diff:
+                    fallback_diff = over
+                    fallback_i = i
+
+        if best_diff is None:
+            best_i = fallback_i
+
+        return [" ".join(words[:best_i]), " ".join(words[best_i:])]
+#=========================================
     def setka_8_full_made(self, fin, posev_data):
         """сетка на 8 в pdf"""
         from reportlab.platypus import Table

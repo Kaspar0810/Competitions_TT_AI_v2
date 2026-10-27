@@ -5,11 +5,6 @@ db = MySQLDatabase("mysql_db", user="root", password="db_pass", host="localhost"
 
 def update_db_credentials(user, password, host='localhost', port=3306, database='mysql_db'):
     db.init(database, user=user, password=password, host=host, port=port)
-# def update_db_credentials(user, password, host='localhost', port=3306, database='mysql_db'):
-#     """Обновляет параметры подключения к БД."""
-#     from peewee import MySQLDatabase
-#     global db
-#     db = MySQLDatabase(database, user=user, password=password, host=host, port=port)
 
 class BaseModel(Model):
     id = PrimaryKeyField()
@@ -99,14 +94,10 @@ class Title(BaseModel):
     kat_ref = CharField(10)
     secretary = CharField()
     kat_sec = CharField(10)
-    gamer = CharField(20)
     full_name_comp = CharField()
     pdf_comp = BlobField()
     short_name_comp = CharField()
     tab_enabled = CharField()
-    multiregion = IntegerField()
-    perenos = IntegerField()
-    otchestvo = IntegerField()
     r_date = CharField()
     vid_turnira = CharField(15)
     notes = TextField(null=True, default='')  # Заметки о соревновании
