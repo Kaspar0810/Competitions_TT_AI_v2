@@ -31031,43 +31031,62 @@ class MainWindow(QMainWindow):
         return math.floor(number * factor) / factor
 # ======== жеребьвка сетки ==========
     def free_place_in_setka(self, max_player, real_all_player_in_final, count_exit):
-        """вычеркиваем свободные номера в сетке"""
-        free_num = []
-        free_number_8 = [2, 7, 6, 3]
+        """Свободные номера в сетке (позиции X)."""
+        free_number_8  = [2, 7, 6, 3]
         free_number_16 = [2, 15, 7, 10, 6, 11, 3, 14]
         free_number_24 = [5, 20, 8, 17, 11, 14, 2, 23]
         free_number_32 = [2, 31, 15, 18, 10, 23, 7, 26, 6, 27, 11, 22, 14, 19, 3, 30]
 
-        count = max_player - real_all_player_in_final # кол-во свободных мест
-
+        count = max_player - real_all_player_in_final
 
         if max_player <= 8:
             free_number = free_number_8
-        if max_player <= 16:
+        elif max_player <= 16:
             free_number = free_number_16
         elif max_player <= 24:
             free_number = free_number_24
-        elif max_player <= 32:
+        else:
             free_number = free_number_32
-        # если нет одного игрока, но выходят два из группы, то есть выбор из двух вариантов     
+
         if count_exit == 1:
             free_num = free_number[:count]
         elif count_exit == 2:
             fn = count if count % 2 == 0 else count + 1
-            free_num = free_number[:fn]       
+            free_num = free_number[:fn]
+        elif count_exit >= 3:
+            # для 3/4 достаточно count X-мест; распределение — «где останется»
+            free_num = free_number[:count]
+        else:
+            free_num = []
         return free_num
 
     def setka_choice_number(self, fin, count_exit):
-        """номера сетки при посеве"""
+        """Номера сетки при посеве.
+
+        Возвращает [player_net, posev_1, posev_2, posev_3, posev_4]
+        (posev_2/3/4 добавляются, если они не пустые).
+
+        posev_1 — позиции для P1 (1-х мест),
+        posev_2 — для P2 (2-х мест),
+        posev_3 — для P3 (3-х мест),
+        posev_4 — для P4 (4-х мест).
+
+        При count_exit == 3 posev_4 остаётся пустым (эти позиции → X).
+        """
         posevs = []
         posev_1 = []
         posev_2 = []
         posev_3 = []
         posev_4 = []
 
-        system = System.select().where((System.title_id == self.current_title_id) & (System.stage == fin)).get()
+        system = System.select().where(
+            (System.title_id == self.current_title_id) &
+            (System.stage == fin) &
+            (System.sex == self.current_sex)
+        ).get()
         max_player = system.max_player
         max_player = self.get_olympic_bracket_size(max_player)
+
         if fin == "Суперфинал":
             count_exit = 1
             posev_1 = [[1, 8], [4, 5], [2, 3, 6, 7]]
@@ -31079,9 +31098,18 @@ class MainWindow(QMainWindow):
                 elif max_player == 16:
                     posev_1 = [[1, 16], [8, 9], [4, 5, 12, 13], [2, 3, 6, 7, 10, 11, 14, 15]]
                 elif max_player == 32:
-                    posev_1 = [[1, 32], [16, 17], [8, 9, 24, 25], [4, 5, 12, 13, 20, 21, 28, 29], [2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31]]
-                player_net = max_player 
-            elif  count_exit == 2:  
+                    posev_1 = [[1, 32], [16, 17], [8, 9, 24, 25],
+                            [4, 5, 12, 13, 20, 21, 28, 29],
+                            [2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31]]
+                elif max_player == 64:
+                    posev_1 = [[1, 64], [32, 33], [16, 17, 48, 49],
+                            [8, 9, 24, 25, 40, 41, 56, 57],
+                            [4, 5, 12, 13, 20, 21, 28, 29, 36, 37, 44, 45, 52, 53, 60, 61],
+                            [2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31,
+                                34, 35, 38, 39, 42, 43, 46, 47, 50, 51, 54, 55, 58, 59, 62, 63]]
+                player_net = max_player
+
+            elif count_exit == 2:
                 if max_player == 8:
                     posev_1 = [[1, 8], [4, 5]]
                     posev_2 = [[2, 3, 6, 7]]
@@ -31091,17 +31119,59 @@ class MainWindow(QMainWindow):
                 elif max_player == 32:
                     posev_1 = [[1, 32], [16, 17], [8, 9, 24, 25], [4, 5, 12, 13, 20, 21, 28, 29]]
                     posev_2 = [[2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31]]
+                elif max_player == 64:
+                    posev_1 = [[1, 64], [32, 33], [16, 17, 48, 49], [8, 9, 24, 25, 40, 41, 56, 57]]
+                    posev_2 = [[2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31,
+                                34, 35, 38, 39, 42, 43, 46, 47, 50, 51, 54, 55, 58, 59, 62, 63]]
                 player_net = max_player
-           
+
+            elif count_exit in (3, 4):
+                # ---------- 4 уровня посева ----------
+                if max_player == 8:
+                    posev_1 = [[1, 8]]
+                    posev_2 = [[4, 5]]
+                    posev_3 = [[3, 6]]
+                    posev_4 = [[2, 7]]
+                elif max_player == 16:
+                    posev_1 = [[1, 16], [8, 9]]
+                    posev_2 = [[4, 5, 12, 13]]
+                    posev_3 = [[3, 6, 11, 14]]
+                    posev_4 = [[2, 7, 10, 15]]
+                elif max_player == 32:
+                    posev_1 = [[1, 32], [16, 17], [8, 9, 24, 25]]
+                    posev_2 = [[4, 5, 12, 13, 20, 21, 28, 29]]
+                    posev_3 = [[3, 6, 11, 14, 19, 22, 27, 30]]
+                    posev_4 = [[2, 7, 10, 15, 18, 23, 26, 31]]
+                elif max_player == 64:
+                    posev_1 = [[1, 64], [32, 33], [16, 17, 48, 49], [8, 9, 24, 25, 40, 41, 56, 57]]
+                    posev_2 = [[4, 5, 12, 13, 20, 21, 28, 29, 36, 37, 44, 45, 52, 53, 60, 61]]
+                    posev_3 = [[3, 6, 11, 14, 19, 22, 27, 30, 35, 38, 43, 46, 51, 54, 59, 62]]
+                    posev_4 = [[2, 7, 10, 15, 18, 23, 26, 31, 34, 39, 42, 47, 50, 55, 58, 63]]
+                player_net = max_player
+
+                # при выходе 3-х — P4 не нужны: позиции posev_4 будут свободны (X)
+                if count_exit == 3:
+                    posev_4 = []
+
+            else:
+                # fallback: любые >4 → трактуем как 4
+                if max_player == 32:
+                    posev_1 = [[1, 32], [16, 17], [8, 9, 24, 25]]
+                    posev_2 = [[4, 5, 12, 13, 20, 21, 28, 29]]
+                    posev_3 = [[3, 6, 11, 14, 19, 22, 27, 30]]
+                    posev_4 = [[2, 7, 10, 15, 18, 23, 26, 31]]
+                player_net = max_player
+
         posevs.append(player_net)
         if len(posev_1) != 0:
             posevs.append(posev_1)
-            if len(posev_2) != 0:
-                posevs.append(posev_2)
-                if len(posev_3) != 0:
-                    posevs.append(posev_3)
-                    if len(posev_4) != 0:
-                        posevs.append(posev_4)
+        if len(posev_2) != 0:
+            posevs.append(posev_2)
+        if len(posev_3) != 0:
+            posevs.append(posev_3)
+        if len(posev_4) != 0:
+            posevs.append(posev_4)
+
         return posevs
 
     def choice_net_automat(self, stage, player_by_group):
@@ -31551,11 +31621,184 @@ class MainWindow(QMainWindow):
 
             return placement
 
+        def draw_out_groups_multi_person(sportsmen_data, free_num, exit_count):
+            """
+            Жеребьёвка для выхода из групп 3 или 4 человек.
+            Каждый спортсмен попадает СТРОГО на позиции из своего посева
+            (posevs_num[1] → P1, posevs_num[2] → P2, posevs_num[3] → P3, posevs_num[4] → P4).
+
+            Правила:
+              1) P1 → P1-позиции (posevs_num[1]); распределяются по четвертям
+                 с учётом регионов.
+              2) P2 → P2-позиции (posevs_num[2]), но только те, что лежат
+                 в противоположной половине от P1 своей группы.
+              3) P3 → P3-позиции (posevs_num[3]), но только те, что лежат
+                 в противоположной четверти от P2 своей группы.
+              4) P4 → P4-позиции (posevs_num[4]), но только те, что лежат
+                 в той же половине, что P1, но в другой четверти.
+            """
+
+            # ---------- Splits by place ----------
+            first_place  = [(i, s) for i, s in enumerate(sportsmen_data) if s[7] == first]
+            second_place = [(i, s) for i, s in enumerate(sportsmen_data) if s[7] == first + 1]
+            third_place  = [(i, s) for i, s in enumerate(sportsmen_data) if s[7] == first + 2]
+            fourth_place = ([(i, s) for i, s in enumerate(sportsmen_data) if s[7] == first + 3]
+                            if exit_count >= 4 else [])
+
+            bracket = posevs_num[0]
+            q_size = bracket // 4
+
+            def get_half(pos):
+                return 1 if pos <= bracket // 2 else 2
+
+            def get_quarter(pos):
+                if pos <= q_size:      return 1
+                if pos <= 2 * q_size:  return 2
+                if pos <= 3 * q_size:  return 3
+                return 4
+
+            def opposite_quarter(q):
+                return {1: 2, 2: 1, 3: 4, 4: 3}[q]
+
+            def opposite_half_quarters(h):
+                return [3, 4] if h == 1 else [1, 2]
+
+            # ---------- Позиции каждого посева (плоские списки) ----------
+            def flatten(groups):
+                out = []
+                for g in groups:
+                    out.extend(g)
+                return out
+
+            p1_positions = flatten(posevs_num[1]) if len(posevs_num) > 1 else []
+            p2_positions = flatten(posevs_num[2]) if len(posevs_num) > 2 else []
+            p3_positions = flatten(posevs_num[3]) if len(posevs_num) > 3 else []
+            p4_positions = flatten(posevs_num[4]) if len(posevs_num) > 4 else []
+
+            placement = {i: None for i in range(1, bracket + 1)}
+            region_quarter_usage = defaultdict(set)
+
+            # ---------- 1) P1 → строго на p1_positions ----------
+            # Распределение по четвертям: сначала по одному P1 в каждую,
+            # затем — по второму и т.д. (с учётом регионального ограничения).
+            # Поэтому берём first_place как есть, без переупорядочивания.
+            unplaced_first = list(first_place)
+
+            # Порядок P1-позиций = как в posevs_num[1] (не по четвертям!)
+            p1_order = []
+            for grp in posevs_num[1]:
+                p1_order.extend(grp)
+
+            for pos in p1_order:
+                if not unplaced_first:
+                    break
+                if placement[pos] is not None:
+                    continue
+
+                q = get_quarter(pos)
+                # пробуем найти спортсмена с другим регионом в этой четверти
+                chosen_i = None
+                for i, (idx, sm) in enumerate(unplaced_first):
+                    region = sm[2] or ""
+                    used = region_quarter_usage.get(region, set())
+                    if region and len(used) < 4 and q in used:
+                        continue
+                    chosen_i = i
+                    break
+                if chosen_i is None:
+                    chosen_i = 0
+
+                idx, sm = unplaced_first.pop(chosen_i)
+                placement[pos] = idx
+                region = sm[2] or ""
+                if region:
+                    region_quarter_usage[region].add(q)
+
+            # ---------- Сохраняем позицию P1 для каждой группы ----------
+            group_first_pos = {}
+            for pos, idx in placement.items():
+                if idx is None or idx >= len(sportsmen_data):
+                    continue
+                sm = sportsmen_data[idx]
+                if sm[7] == first:
+                    group_first_pos[sm[3]] = pos
+
+            # ---------- 2) P2 → строго на p2_positions противоположной половины ----------
+            # Свободные p2-позиции, сгруппированные по четвертям
+            p2_by_q = defaultdict(list)
+            for p in p2_positions:
+                p2_by_q[get_quarter(p)].append(p)
+
+            p2_by_quarter_count = defaultdict(int)
+            group_second_pos = {}
+
+            for idx, sm in second_place:
+                group = sm[3]
+                if group not in group_first_pos:
+                    continue
+                p1_half = get_half(group_first_pos[group])
+                target_qs = opposite_half_quarters(p1_half)
+                # Сортируем по заполненности четверти — чтобы равномерно
+                target_qs.sort(key=lambda q: p2_by_quarter_count[q])
+
+                placed = False
+                for q in target_qs:
+                    if p2_by_q[q]:
+                        pos = p2_by_q[q].pop(0)
+                        placement[pos] = idx
+                        p2_by_quarter_count[q] += 1
+                        group_second_pos[group] = pos
+                        placed = True
+                        break
+                if not placed:
+                    # Резерв — любая свободная p2-позиция (краевой случай)
+                    for q in target_qs:
+                        if p2_by_q[q]:
+                            break
+
+            # ---------- 3) P3 → строго на p3_positions противоположной четверти от P2 ----------
+            p3_by_q = defaultdict(list)
+            for p in p3_positions:
+                p3_by_q[get_quarter(p)].append(p)
+
+            for idx, sm in third_place:
+                group = sm[3]
+                if group not in group_second_pos:
+                    continue
+                p2_q = get_quarter(group_second_pos[group])
+                p3_q = opposite_quarter(p2_q)
+                if p3_by_q[p3_q]:
+                    pos = p3_by_q[p3_q].pop(0)
+                    placement[pos] = idx
+
+            # ---------- 4) P4 → строго на p4_positions (та же половина, другая четверть от P1) ----------
+            if exit_count >= 4:
+                p4_by_q = defaultdict(list)
+                for p in p4_positions:
+                    p4_by_q[get_quarter(p)].append(p)
+
+                for idx, sm in fourth_place:
+                    group = sm[3]
+                    if group not in group_first_pos:
+                        continue
+                    p1_q = get_quarter(group_first_pos[group])
+                    p4_q = opposite_quarter(p1_q)
+                    if p4_by_q[p4_q]:
+                        pos = p4_by_q[p4_q].pop(0)
+                        placement[pos] = idx
+
+            return placement
+
         table = {} 
         if count_exit == 1:    
             placement = draw_out_groups_one_person(sportsmen_data, free_num)
         elif count_exit == 2:
             placement = draw_out_groups_two_person(full_posev, free_num)
+        elif count_exit in (3, 4):
+            placement = draw_out_groups_multi_person(full_posev, free_num, count_exit)
+        else:
+            # fallback
+            placement = draw_out_groups_multi_person(full_posev, free_num, 4)
 
         player_list = []
 
