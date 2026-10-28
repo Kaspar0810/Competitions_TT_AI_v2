@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QFrame, QSizePolicy, QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QLineEdit, QDateEdit, QComboBox, QGroupBox, QFormLayout, QStyledItemDelegate,
     QScrollArea, QSplitter, QInputDialog, QHeaderView, QAbstractItemView, QButtonGroup,
-    QDialog, QProgressBar, QFileDialog, QMenu, QProgressDialog, QTextEdit, QSpinBox
+    QDialog, QProgressBar, QFileDialog, QMenu, QProgressDialog, QTextEdit, QSpinBox, QDoubleSpinBox
 )
 from PyQt5.QtWidgets import QGridLayout  # Добавьте в импорт
 from PyQt5.QtCore import Qt, QDate, QSize, pyqtSignal, QThread
@@ -9501,7 +9501,7 @@ class MainWindow(QMainWindow):
                 'kat_ref': "",
                 'secretary': "",
                 'kat_sec': "",
-                'gamer': "",
+                # 'gamer': "",
                 'vid_turnira': self.selected_tournament_type,
                 'tab_enabled': "1",
                 'r_date': rating_date_str
@@ -23284,28 +23284,25 @@ class MainWindow(QMainWindow):
         return None
 # ============ титульный лист в формате PDF
     def create_title_page_pdf(self):
-        """Создание титульного листа в PDF формате A4 книжная ориентация"""
+        """Создание титульного листа в PDF (A4, книжная)."""
         if not self.current_title_id:
             QMessageBox.warning(self, "Ошибка", "Сначала выберите соревнование")
             return
 
         try:
-            # Получаем данные о соревновании
             title = Title.get_by_id(self.current_title_id)
 
-            # Создаём папку, если её нет
             pdf_dir = "table_pdf"
             if not os.path.exists(pdf_dir):
                 os.makedirs(pdf_dir)
 
-            # Имя файла
             short_name = title.short_name_comp if title.short_name_comp else title.name
             import re
             clean_name = re.sub(r'[\\/*?:"<>|]', "", str(short_name))
             clean_name = clean_name[:50] if len(clean_name) > 50 else clean_name
             filename = os.path.join(pdf_dir, f"{clean_name}_title_page.pdf")
 
-            # Спрашиваем про изображение
+            # ---- Спрашиваем про изображение ----
             reply = QMessageBox.question(
                 self,
                 "Изображение на титульный лист",
@@ -23314,6 +23311,9 @@ class MainWindow(QMainWindow):
             )
 
             image_path = None
+            img_w_cm = 10.0
+            img_h_cm = 10.0
+
             if reply == QMessageBox.Yes:
                 image_path, _ = QFileDialog.getOpenFileName(
                     self,
@@ -23322,20 +23322,101 @@ class MainWindow(QMainWindow):
                     "Images (*.png *.jpg *.jpeg *.gif *.bmp)"
                 )
                 if not image_path:
-                    return  # пользователь отменил выбор
+                    return
 
-            # Создаём PDF-документ
+                # ---- Диалог выбора размера изображения ----
+                dlg = QDialog(self)
+                dlg.setWindowTitle("Размер изображения")
+                lay = QVBoxLayout(dlg)
+                lay.addWidget(QLabel("Размер изображения на титульном листе:"))
+
+                row1 = QHBoxLayout()
+                row1.addWidget(QLabel("Ширина, см:"))
+                spin_w = QDoubleSpinBox()
+                spin_w.setRange(1.0, 17.0)
+                spin_w.setDecimals(1)
+                spin_w.setSingleStep(0.5)
+                spin_w.setValue(10.0)
+                row1.addWidget(spin_w)
+                lay.addLayout(row1)
+
+                row2 = QHBoxLayout()
+                row2.addWidget(QLabel("Высота, см:"))
+                spin_h = QDoubleSpinBox()
+                spin_h.setRange(1.0, 24.0)
+                spin_h.setDecimals(1)
+                spin_h.setSingleStep(0.5)
+                spin_h.setValue(10.0)
+                row2.addWidget(spin_h)
+                lay.addLayout(row2)
+
+                keep_ratio_cb = QCheckBox("Сохранять пропорции")
+                keep_ratio_cb.setChecked(True)
+                lay.addWidget(keep_ratio_cb)
+
+                # ---- исходные пропорции ----
+                try:
+                    from PyQt5.QtGui import QPixmap
+                    pix = QPixmap(image_path)
+                    nat_w, nat_h = pix.width(), pix.height()
+                    ratio = (nat_w / nat_h) if nat_h > 0 else 1.0
+                except Exception:
+                    ratio = 1.0
+                    nat_w = nat_h = 1
+
+                # синхронизация при сохранении пропорций
+                def _sync_w_from_h(_):
+                    if keep_ratio_cb.isChecked() and ratio > 0:
+                        spin_w.blockSignals(True)
+                        spin_w.setValue(round(spin_h.value() * ratio, 1))
+                        spin_w.blockSignals(False)
+
+                def _sync_h_from_w(_):
+                    if keep_ratio_cb.isChecked() and ratio > 0:
+                        spin_h.blockSignals(True)
+                        spin_h.setValue(round(spin_w.value() / ratio, 1))
+                        spin_h.blockSignals(False)
+
+                spin_w.valueChanged.connect(_sync_h_from_w)
+                spin_h.valueChanged.connect(_sync_w_from_h)
+
+                bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+                bb.accepted.connect(dlg.accept)
+                bb.rejected.connect(dlg.reject)
+                lay.addWidget(bb)
+
+                if dlg.exec_() != QDialog.Accepted:
+                    return
+
+                img_w_cm = spin_w.value()
+                img_h_cm = spin_h.value()
+
+            # ---- Документ ----
             doc = SimpleDocTemplate(filename, pagesize=A4,
-                                    topMargin=2*cm, bottomMargin=2*cm,
+                                    topMargin=1*cm, bottomMargin=1*cm,
                                     leftMargin=2*cm, rightMargin=2*cm)
 
             styles = getSampleStyleSheet()
-            title_style = PS("TitleStyle", fontSize=18, fontName="DejaVuSerif-Bold",
-                            alignment=1, spaceAfter=20, textColor=colors.darkblue)
-            subtitle_style = PS("SubtitleStyle", fontSize=14, fontName="DejaVuSerif",
-                                alignment=1, spaceAfter=10, textColor=colors.black)
-            info_style = PS("InfoStyle", fontSize=12, fontName="DejaVuSerif",
-                            alignment=1, spaceAfter=8, textColor=colors.black)
+
+            # ---- стиль названия: увеличенный leading ----
+            # fontSize 18, leading = 26 (межстрочный интервал 1.45×)
+            title_style = PS("TitleStyle",
+                             fontSize=18,
+                             leading=26,
+                             fontName="DejaVuSerif-Bold",
+                             alignment=1,
+                             spaceAfter=20,
+                             textColor=colors.darkblue)
+            subtitle_style = PS("SubtitleStyle", fontSize=14,
+                                leading=18,
+                                fontName="DejaVuSerif",
+                                alignment=1, spaceAfter=10,
+                                textColor=colors.black)
+            info_style = PS("InfoStyle", fontSize=12,
+                            leading=15,
+                            fontName="DejaVuSerif",
+                            alignment=1, spaceAfter=8,
+                            textColor=colors.black)
 
             elements = []
 
@@ -23345,10 +23426,12 @@ class MainWindow(QMainWindow):
             elements.append(Paragraph("Федерация настольного тенниса Нижегородской области", subtitle_style))
             elements.append(Spacer(1, 1.5*cm))
 
-            # ---- Изображение (если есть) ----
+            # ---- Изображение ----
             if image_path and os.path.exists(image_path):
                 try:
-                    img = Image(image_path, width=10*cm, height=10*cm)
+                    img = Image(image_path,
+                                width=img_w_cm * cm,
+                                height=img_h_cm * cm)
                     img.hAlign = 'CENTER'
                     elements.append(img)
                     elements.append(Spacer(1, 1*cm))
@@ -23356,38 +23439,67 @@ class MainWindow(QMainWindow):
                     print(f"Ошибка загрузки изображения: {e}")
 
             # ---- Основная информация ----
-            # Название соревнования
             name = title.name if title.name else "Соревнование"
             elements.append(Paragraph(name, title_style))
             elements.append(Spacer(1, 0.5*cm))
 
-            # Категория участников
             sredi = title.sredi if title.sredi else ""
             vozrast = title.vozrast if title.vozrast else ""
             if sredi or vozrast:
                 elements.append(Paragraph(f"среди {sredi} {vozrast}", subtitle_style))
                 elements.append(Spacer(1, 0.5*cm))
 
-            # ---- Нижняя часть ----
-            # Место проведения
+            # ---- Пружина: прижимает нижний блок к низу страницы ----
+            from reportlab.platypus import Spacer as RLSpacer
+            elements.append(RLSpacer(1, 1))
+            # «растягивающий» спейсер с фиксированной высотой не работает
+            # напрямую в platypus, поэтому используем «тяжёлый» spacer:
+            # минимальный зазор + остальное досыпаем фиктивным спейсером.
+            # Однако platypus не поддерживает «растяжение» напрямую;
+            # наиболее надёжный способ — прижать нижнюю часть через
+            # BuildDoc с шаблоном страницы. Здесь проще — использовать
+            # гибкую высоту спейсера. Сделаем через frame.
+
+            # Собираем НИЖНИЙ блок отдельно и размещаем его на канвасе
+            # через onPage-функцию, чтобы гарантированно оказаться внизу.
+            bottom_info_lines = []
             mesto = title.mesto if title.mesto else ""
             if mesto:
-                elements.append(Paragraph(f"г. {mesto}", info_style))
+                bottom_info_lines.append(f"г. {mesto}")
 
-            # Даты
             start = title.data_start.strftime("%d.%m.%Y") if title.data_start else ""
             end = title.data_end.strftime("%d.%m.%Y") if title.data_end else ""
             if start and end:
-                elements.append(Paragraph(f"{start} - {end}", info_style))
+                bottom_info_lines.append(f"{start} - {end}")
             elif start:
-                elements.append(Paragraph(start, info_style))
+                bottom_info_lines.append(start)
 
-            # Создаём PDF
-            doc.build(elements)
+            # ---- onPage: рисуем нижний блок вручную ----
+            def _on_page(canvas_obj, doc_obj):
+                canvas_obj.saveState()
+                # шрифт — DejaVuSerif
+                try:
+                    canvas_obj.setFont("DejaVuSerif", 12)
+                except Exception:
+                    canvas_obj.setFont("Helvetica", 12)
+                canvas_obj.setFillColor(colors.black)
+
+                # отступ снизу (от нижнего края страницы)
+                y = 3 * cm
+                line_h = 0.6 * cm
+                # снизу вверх: сначала даты, потом место
+                # (или наоборот — в зависимости от желаемого порядка;
+                #  сейчас: сверху место, ниже — даты)
+                lines_top_down = list(bottom_info_lines)
+                for i, line in enumerate(lines_top_down):
+                    y_line = y + (len(lines_top_down) - 1 - i) * line_h
+                    canvas_obj.drawCentredString(A4[0] / 2.0, y_line, line)
+                canvas_obj.restoreState()
+
+            doc.build(elements, onFirstPage=_on_page)
 
             QMessageBox.information(self, "Успех", f"Титульный лист сохранён в:\n{filename}")
 
-            # Предлагаем открыть файл
             reply = QMessageBox.question(self, "Открыть файл",
                                         "Открыть созданный PDF файл?",
                                         QMessageBox.Yes | QMessageBox.No)
