@@ -145,9 +145,7 @@ class MainWindow(QMainWindow):
                 "buttons": ["➕ Добавить", "✏️ Редактировать", "🗑️ Удалить", "⭐ Рейтинг"]},
             3: {"title": "Пары", "description": "Формирование пар",
                 "buttons": []},
-                    # ["🗑️ Удалить пару", "🎲 Создать"],
-                    # ["🗑️ Очистить форму"],
-                    # ["📊 Посев", "📊 По рейтингу"]]},
+   
             4: {"title": "Система", "description": "Настройки системы проведения",
                 "buttons": [
                     ["🔍 Поиск в Choice", "📊 Статистика"],
@@ -350,7 +348,6 @@ class MainWindow(QMainWindow):
             self.double_players_model.setData(doubles_data)
             self.doubles_table_view.setModel(self.double_players_model)
             self.doubles_table_view.setColumnHidden(0, True)
-            # self.highlight_duplicate_players()
 
         except Exception as e:
             print(f"Ошибка загрузки пар: {e}")
@@ -1016,8 +1013,6 @@ class MainWindow(QMainWindow):
         self.results_table_view.doubleClicked.connect(self.on_match_double_clicked)
         self.results_table_view.setSelectionMode(QTableView.SingleSelection)
 
-        # Или растянуть все колонки пропорционально
-        # header.setSectionResizeMode(QHeaderView.Stretch)
         
         # Таблица команд
         self.teams_table_view = QTableView()
@@ -1312,45 +1307,6 @@ class MainWindow(QMainWindow):
         self.city_filter_edit.clear()
         self.rating_search_edit.clear()
 
-    # def check_rating_actual(self):
-    #     """Проверяет актуальность рейтинга и предлагает обновить при необходимости"""
-    #     try:
-    #         # Получаем последнее соревнование (или все)
-    #         titles = Title.select().order_by(Title.id.desc())
-    #         if titles.count() == 0:
-    #             return
-
-    #         # Текущий месяц в формате yyyy_MM
-    #         current_month = QDate.currentDate().toString("yyyy_MM")
-    #         outdated = []
-
-    #         for title in titles:
-    #             r_date = title.r_date if title.r_date else ""
-    #             if r_date != current_month:
-    #                 outdated.append((title.id, title.name, r_date))
-
-    #         if outdated:
-    #             # Формируем список устаревших соревнований
-    #             info = "\n".join(
-    #                 f"• {name} (рейтинг: {r_date or 'не указан'})"
-    #                 for _, name, r_date in outdated[:5]
-    #             )
-    #             if len(outdated) > 5:
-    #                 info += f"\n... и ещё {len(outdated) - 5}"
-
-    #             reply = QMessageBox.question(
-    #                 self,
-    #                 "Рейтинг устарел",
-    #                 f"Обнаружены соревнования с устаревшим рейтингом:\n\n{info}\n\n"
-    #                 f"Текущий месяц: {current_month}\n"
-    #                 f"Обновить рейтинг сейчас?",
-    #                 QMessageBox.Yes | QMessageBox.No
-    #             )
-    #             if reply == QMessageBox.Yes:
-    #                 self.open_update_rating_dialog()
-    #     except Exception as e:
-    #         print(f"Ошибка проверки рейтинга: {e}")
-
     def check_rating_actual(self):
         """Проверяет актуальность рейтинга только для активных соревнований"""
         try:
@@ -1510,13 +1466,6 @@ class MainWindow(QMainWindow):
         """Синхронизирует рейтинг из Player в связанные таблицы"""
         try:
             players = Player.select().where(Player.title_id == self.current_title_id)
-
-            # # Playes
-            # for p in players:
-            #     Player.update(rank=p.rank).where(
-            #         (Player.title_id == self.current_title_id) &
-            #         (Player.id == p.id)
-            #     ).execute()
 
             # Choice
             for p in players:
@@ -11882,97 +11831,8 @@ class MainWindow(QMainWindow):
     def show_team_rating(self):
         QMessageBox.information(self, "Рейтинг", "Рейтинг команд")
 
-    # def generate_pairs(self):
-    #     QMessageBox.information(self, "Пары", "Формирование пар")
-
     def break_pairs(self):
         QMessageBox.information(self, "Пары", "Разбивка пар")
-
-# =========== пробный вариант ручного посева пар ===
-    # def seeding_pairs(self):
-    #     """Посев пар с использованием ручной жеребьёвки"""
-    #     if not self.current_title_id:
-    #         QMessageBox.warning(self, "Ошибка", "Сначала выберите соревнование")
-    #         return
-
-    #     # Получаем вид пары из комбобокса
-    #     vid = self.double_vid_combo.currentText() if hasattr(self, 'double_vid_combo') else "мужские"
-
-    #     # Фильтруем пары по виду
-    #     query = Players_double.select().where(Players_double.title_id == self.current_title_id)
-    #     if vid == "мужские":
-    #         query = query.where(Players_double.double_vid == "man")
-    #     elif vid == "женские":
-    #         query = query.where(Players_double.double_vid == "woman")
-    #     elif vid == "смешанные":
-    #         query = query.where(Players_double.double_vid == "mix")
-
-    #     # Сортируем по убыванию суммы рейтинга
-    #     query = query.order_by(Players_double.r_sum.desc())
-
-    #     if query.count() == 0:
-    #         QMessageBox.warning(self, "Ошибка", "Нет пар для посева")
-    #         return
-
-    #     # Формируем список пар в формате для manual_choice
-    #     # Каждая пара представляется как [id, имя, рейтинг, регион, тренер]
-    #     pairs_for_seeding = []
-    #     for double in query:
-    #         # Формируем отображаемое имя пары
-    #         name = double.para_shot or f"{double.player_1} / {double.player_2}"
-    #         region = double.region_main or ""
-    #         rank = double.r_sum or 0
-
-    #         pairs_for_seeding.append([
-    #             double.id,          # id пары
-    #             name,               # название пары
-    #             rank,               # рейтинг (сумма)
-    #             region,             # регион
-    #             ""                  # тренер (для пар не используется)
-    #         ])
-
-    #     # Запрашиваем количество групп для жеребьёвки (обычно 1 для пар)
-    #     num_groups = 1
-
-    #     # Вызываем диалог ручной жеребьёвки
-    #     try:
-    #         from manual_choice import choice_group_manual
-    #         num_id_pair = choice_group_manual(
-    #             self,
-    #             pairs_for_seeding,
-    #             num_groups,
-    #             "Пары",
-    #             parent=self
-    #         )
-    #     except ImportError:
-    #         QMessageBox.critical(self, "Ошибка", "Модуль manual_choice не найден")
-    #         return
-
-    #     if num_id_pair is None:
-    #         return  # пользователь отменил
-
-    #     # Сохраняем результаты жеребьёвки в таблицу Players_double
-    #     try:
-    #         for pl in num_id_pair:
-    #             pair_id = pl.get('id_player')  # в manual_choice возвращается id
-    #             posev = pl.get('seed_num')     # номер посева
-    #             if pair_id and posev:
-    #                 Players_double.update(posev=posev).where(
-    #                     Players_double.id == pair_id
-    #                 ).execute()
-
-    #         QMessageBox.information(self, "Успех", 
-    #             f"Жеребьёвка пар выполнена успешно.\n"
-    #             f"Всего пар: {len(pairs_for_seeding)}")
-
-    #         # Обновляем таблицу
-    #         self.load_doubles_for_title()
-
-    #     except Exception as e:
-    #         QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить результаты жеребьёвки: {str(e)}")
-    #         import traceback
-    #         traceback.print_exc()
-#============================================
 
     def system_settings(self):
         QMessageBox.information(self, "Система", "Настройки системы")
