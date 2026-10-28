@@ -9955,6 +9955,7 @@ class MainWindow(QMainWindow):
                          "Панель управления соревнованиями\n"
                          "Версия 3.0\n\n"
                          "Работа с базой данных MySQL\n"
+                         "Автор: Кабанов А.С. & AI\n"
                          "© 2026")
  
     def closeEvent(self, event):
@@ -11833,6 +11834,7 @@ class MainWindow(QMainWindow):
 
     def break_pairs(self):
         QMessageBox.information(self, "Пары", "Разбивка пар")
+
 
     def system_settings(self):
         QMessageBox.information(self, "Система", "Настройки системы")
@@ -17749,6 +17751,31 @@ class MainWindow(QMainWindow):
 
         return 7
 
+    def gamer_on_title(self, sredi):
+        """Определяет пол игроков для титула"""
+        # Определяем пол игроков для сообщения
+        if sredi == "юношей и девушек":
+            men_text = "Юноши"
+            women_text = "Девушки"
+        elif sredi == "мальчиков и девочек":
+            men_text = "Мальчики"
+            women_text = "Девочки"
+        elif sredi == "юниоров и юниорок":
+            men_text = "Юниоры"
+            women_text = "Юниорки"
+        else:
+            men_text = "Мужчины"
+            women_text = "Женщины"
+
+            
+        if self.current_sex == 'man':
+            gamer = men_text
+            sex = 'M'
+        else:
+            gamer = women_text
+            sex = 'W'
+        return [gamer, sex]
+
     def print_podium_list(self):
         """Создание PDF со списком призеров (1-3 места)"""
         if not self.current_title_id:
@@ -17780,27 +17807,30 @@ class MainWindow(QMainWindow):
             title = Title.get_by_id(self.current_title_id)
             # ============
             sredi = title.sredi
-            # Определяем пол игроков для сообщения
-            if sredi == "юношей и девушек":
-                men_text = "Юноши"
-                women_text = "Девушки"
-            elif sredi == "мальчиков и девочек":
-                men_text = "Мальчики"
-                women_text = "Девочки"
-            elif sredi == "юниоров и юниорок":
-                men_text = "Юниоры"
-                women_text = "Юниорки"
-            else:
-                men_text = "Мужчины"
-                women_text = "Женщины"
+            result = self.gamer_on_title(sredi)
+            gamer = result[0]
+            sex = result[1]
+            # # Определяем пол игроков для сообщения
+            # if sredi == "юношей и девушек":
+            #     men_text = "Юноши"
+            #     women_text = "Девушки"
+            # elif sredi == "мальчиков и девочек":
+            #     men_text = "Мальчики"
+            #     women_text = "Девочки"
+            # elif sredi == "юниоров и юниорок":
+            #     men_text = "Юниоры"
+            #     women_text = "Юниорки"
+            # else:
+            #     men_text = "Мужчины"
+            #     women_text = "Женщины"
 
              
-            if self.current_sex == 'man':
-                gamer = men_text
-                sex = 'M'
-            else:
-                gamer = women_text
-                sex = 'W'
+            # if self.current_sex == 'man':
+            #     gamer = men_text
+            #     sex = 'M'
+            # else:
+            #     gamer = women_text
+            #     sex = 'W'
             # ============
             # otc = title.otchestvo if title.otchestvo else 0
 
@@ -20801,7 +20831,10 @@ class MainWindow(QMainWindow):
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
         vid_turnira = titles.vid_turnira
-        gamer = titles.gamer
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
  
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -21007,7 +21040,10 @@ class MainWindow(QMainWindow):
         # добавить в аргументы функции
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
-        gamer = titles.gamer
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
  
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -21178,7 +21214,10 @@ class MainWindow(QMainWindow):
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
         vid_turnira = titles.vid_turnira
-        gamer = titles.gamer
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
  
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -21349,8 +21388,11 @@ class MainWindow(QMainWindow):
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
         vid_turnira = titles.vid_turnira
-        gamer = titles.gamer
- 
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
+
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
             (System.sex == self.current_sex) &
@@ -21575,7 +21617,10 @@ class MainWindow(QMainWindow):
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
         vid_turnira = titles.vid_turnira
-        gamer = titles.gamer
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
  
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -21731,7 +21776,10 @@ class MainWindow(QMainWindow):
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
         vid_turnira = titles.vid_turnira
-        gamer = titles.gamer
+
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
     
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -21938,7 +21986,9 @@ class MainWindow(QMainWindow):
         column_count = column * 13
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
-        gamer = titles.gamer
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
 
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -22216,7 +22266,9 @@ class MainWindow(QMainWindow):
 
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
-        gamer = titles.gamer
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
 
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -22374,7 +22426,9 @@ class MainWindow(QMainWindow):
         final = fin
 
         titles = Title.select().where(Title.id == self.current_title_id).get()
-        gamer = titles.gamer
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
 
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -22664,7 +22718,9 @@ class MainWindow(QMainWindow):
         column_count = column * 13
         final = fin
         titles = Title.select().where(Title.id == self.current_title_id).get()
-        gamer = titles.gamer
+        sredi = titles.sredi
+        result = self.gamer_on_title(sredi)
+        gamer = result[0]
 
         finals = System.select().where(
             (System.title_id == self.current_title_id) &
@@ -23552,7 +23608,9 @@ class MainWindow(QMainWindow):
             final = fin
             titles = Title.select().where(Title.id == self.current_title_id).get()
             vid_turnira = titles.vid_turnira
-            gamer = titles.gamer
+            sredi = titles.sredi
+            result = self.gamer_on_title(sredi)
+            gamer = result[0]
     
             finals = System.select().where(
                 (System.title_id == self.current_title_id) &
