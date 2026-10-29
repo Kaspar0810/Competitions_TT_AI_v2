@@ -196,6 +196,19 @@ class MainWindow(QMainWindow):
 
         self.is_editing_mode = False  # Флаг режима редактирования
 
+
+# import sys
+# import os
+
+    # def resource_path(relative_path):
+    #     if getattr(sys, 'frozen', False):
+    #         base_path = sys._MEIPASS
+    #     else:
+    #         base_path = os.path.abspath(".")
+    #     return os.path.join(base_path, relative_path)
+
+# Пример использования для иконки
+# icon_path = resource_path("my_icon.ico")
 # =========================
     def check_old_backups_on_startup(self):
         """Проверка старых бэкапов при запуске"""
@@ -35652,13 +35665,32 @@ def main():
 
 if __name__ == "__main__":
 
-    registerFontFamily('DejaVuSerif', normal='DejaVuSerif',
-                   bold='DejaVuSerif-Bold', italic='DejaVuSerif-Italic')
-    outpath = os.path.join(os.getcwd(), 'font')
-    pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(outpath, 'DejaVuSans.ttf')))
-    pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(outpath, 'DejaVuSans-Bold.ttf')))
-    pdfmetrics.registerFont(TTFont('DejaVuSerif', os.path.join(outpath, 'DejaVuSerif.ttf')))
-    pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', os.path.join(outpath, 'DejaVuSerif-Bold.ttf')))
-    pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', os.path.join(outpath, 'DejaVuSerif-Italic.ttf')))
+    def resource_path(relative_path):
+        """Возвращает путь к ресурсу, работая и в IDE, и в собранном exe."""
+        try:
+            base_path = sys._MEIPASS  # папка, куда PyInstaller распаковывает данные
+        except AttributeError:
+            base_path = os.path.abspath(".")
+        return os.path.join(base_path, relative_path)
+
+    font_path = resource_path(os.path.join("font", "DejaVuSans.ttf"))
+    pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
+    font_path = resource_path(os.path.join("font", "DejaVuSans-Bold.ttf"))
+    pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', font_path))
+    font_path = resource_path(os.path.join("font", "DejaVuSerif.ttf"))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif', font_path))
+    font_path = resource_path(os.path.join("font", "DejaVuSerif-Bold.ttf"))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', font_path))
+    font_path = resource_path(os.path.join("font", "DejaVuSerif-Italic.ttf"))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', font_path))
+
+    # registerFontFamily('DejaVuSerif', normal='DejaVuSerif',
+    #                bold='DejaVuSerif-Bold', italic='DejaVuSerif-Italic')
+    # outpath = os.path.join(os.getcwd(), 'font')
+    # pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(outpath, 'DejaVuSans.ttf')))
+    # pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(outpath, 'DejaVuSans-Bold.ttf')))
+    # pdfmetrics.registerFont(TTFont('DejaVuSerif', os.path.join(outpath, 'DejaVuSerif.ttf')))
+    # pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', os.path.join(outpath, 'DejaVuSerif-Bold.ttf')))
+    # pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', os.path.join(outpath, 'DejaVuSerif-Italic.ttf')))
 
     main()
