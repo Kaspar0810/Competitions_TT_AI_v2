@@ -2634,13 +2634,6 @@ class PlayerItem(QListWidgetItem):
         self.player_data = player_data
         self.setText(f"{player_data['name']} ({player_data['city']})")
 
-class PlayerItem(QListWidgetItem):
-    def __init__(self, player_data):
-        super().__init__()
-        self.player_data = player_data
-        self.setText(f"{player_data['name']} ({player_data['city']})")
-
-
 class ManualNetDrawDialog(QDialog):
     def __init__(self, parent=None, title_id=None, stage_name=None, sex=None):
         super().__init__(parent)
@@ -3164,10 +3157,13 @@ class ManualNetDrawDialog(QDialog):
             self.update_player_info(self.current_player)
             self.highlight_conflicts(self.current_player)
             self.get_seed_positions(pos)
+            self.highlight_zones_for_current_player()  
             self.highlight_posev()
         else:
             self.current_player = None
             self.update_player_info(None)
+
+        # self.highlight_zones_for_current_player()    
         self.update_players_list()
         self.status_label.setText(f"Игрок {player_data['name']} размещён на позиции {pos}")
         return True
@@ -3198,6 +3194,8 @@ class ManualNetDrawDialog(QDialog):
             self.update_player_info(old_player_data)
             self.highlight_conflicts(old_player_data)
             self.status_label.setText(f"Замена: {old_player_data['name']} на позицию {pos}")
+
+            self.highlight_zones_for_current_player()
             return
 
         # Если позиция свободна
@@ -3221,6 +3219,7 @@ class ManualNetDrawDialog(QDialog):
         self.update_player_info(self.current_player)
         self.update_players_list()
         self.update_net_display()
+        self.highlight_zones_for_current_player()
     # ----------------------------------------------
     # Подсветка
     # ----------------------------------------------
@@ -3260,33 +3259,183 @@ class ManualNetDrawDialog(QDialog):
                     item.setBackground(QColor(240, 128, 128))  # светло-красный
 
     def highlight_posev(self):
-        """Подсвечивает номера посева для текущего игрока"""
-        # Сбрасываем подсветку в первом столбце
-        for row in range(self.net_table.rowCount()):
-            item = self.net_table.item(row, 0)
-            if item:
-                item.setBackground(Qt.white)
-
+        """Голубая подсветка номеров посева для текущего игрока.
+        Не стирает серые зоны (только белый → голубой на свободных позициях)."""
+        if not hasattr(self, 'net_table') or self.net_table is None:
+            return
         if not self.current_player:
             return
-
-        # Определяем номер текущего игрока в исходном списке (индекс + 1)
-        # Для этого нужно знать полный список участников до сортировки
-        # Мы сохраним его в self.all_players при загрузке
         if not hasattr(self, 'all_players'):
             return
+
+        blue_bg = QColor(173, 216, 230)
+        gray_bg = QColor(230, 230, 230)
+
+        # 1) Сбрасываем ПРЕДЫДУЩИЕ голубые в белый (серые не трогаем)
+        for row in range(self.net_table.rowCount()):
+            item = self.net_table.item(row, 0)
+            if item and item.background().color() == blue_bg:
+                item.setBackground(Qt.white)
+
+        # 2) Определяем seed-позиции текущего игрока
         try:
             idx = self.all_players.index(self.current_player)
             player_index = idx + 1
-            seed_positions = self.get_seed_positions(player_index)
-            for pos in seed_positions:
-                if pos not in self.net_positions:
-                    row = pos - 1
-                    item = self.net_table.item(row, 0)
-                    if item:
-                        item.setBackground(QColor(173, 216, 230))  # светло-голубой
         except ValueError:
-            pass
+            return
+        seed_positions = self.get_seed_positions(player_index)
+        if not seed_positions:
+            return
+
+        # 3) Красим голубым незанятые seed-позиции; серое — перекрываем голубым,
+        #    потому что seed-позиция = рекомендованная, она важнее
+        for pos in seed_positions:
+            if pos in self.net_positions:
+                continue
+            row = pos - 1
+            item = self.net_table.item(row, 0)
+            if item:
+                item.setBackground(blue_bg)
+    # ----------------------------------------------
+    # Подсветка зон (половина/четверть) по правилам 2/3/4-х выходов
+    # ----------------------------------------------
+    def highlight_zones_for_current_player(self):
+        """
+        Зоны (половина/четверть) по правилам 2/3/4-х выходов.
+        Голубая подсветка seed-позиций НЕ перебивается — серая кладётся
+        только на не-голубые незанятые позиции.
+        """
+        if not hasattr(self, 'net_table') or self.net_table is None:
+            return
+        if not self.current_player or not self.current_system:
+            return
+
+        # 1) Сначала сбрасываем ТОЛЬКО серый на номерах (голубые не трогаем).
+        gray_bg = QColor(230, 230, 230)
+        for row in range(self.net_table.rowCount()):
+            item = self.net_table.item(row, 0)
+            if item and item.background().color() == gray_bg:
+                item.setBackground(Qt.white)
+
+        count_exit = getattr(self.current_system, 'mesta_exit', 1) or 1
+        if count_exit < 2:
+            return
+
+        # 2) Определяем посев игрока относительно диапазона мест.
+        my_rank = self._get_my_seed_rank(self.current_player)
+        if my_rank is None or my_rank < 2:
+            return  # P1 не подсвечиваем — ему и так голубым показаны позиции
+
+        bracket = self.max_players
+        half_size = bracket // 2
+        quarter_size = bracket // 4
+
+        def get_half(pos):
+            return 1 if pos <= half_size else 2
+
+        def get_quarter(pos):
+            if pos <= quarter_size:       return 1
+            if pos <= 2 * quarter_size:   return 2
+            if pos <= 3 * quarter_size:   return 3
+            return 4
+
+        def opposite_quarter(q):
+            return {1: 2, 2: 1, 3: 4, 4: 3}[q]
+
+        def quarter_range(q):
+            return range((q - 1) * quarter_size + 1, q * quarter_size + 1)
+
+        # 3) Ищем P1/P2 своей группы среди уже размещённых
+        my_group = self.current_player.get('group')
+        p1_pos = None
+        p2_pos = None
+        for pos, np in self.net_positions.items():
+            src = self._source_player_data(pos)
+            if not src or src.get('group') != my_group:
+                continue
+            r = self._get_my_seed_rank(src)
+            if r == 1:
+                p1_pos = pos
+            elif r == 2:
+                p2_pos = pos
+
+        target_positions = []
+
+        if my_rank == 2:
+            if p1_pos is None:
+                return
+            p1_half = get_half(p1_pos)
+            if p1_half == 1:
+                target_positions = list(range(half_size + 1, bracket + 1))
+            else:
+                target_positions = list(range(1, half_size + 1))
+
+        elif my_rank == 3:
+            if p2_pos is None:
+                return
+            p2_q = get_quarter(p2_pos)
+            target_q = opposite_quarter(p2_q)
+            target_positions = list(quarter_range(target_q))
+
+        elif my_rank == 4:
+            if p1_pos is None:
+                return
+            p1_q = get_quarter(p1_pos)
+            target_q = opposite_quarter(p1_q)
+            target_positions = list(quarter_range(target_q))
+
+        else:
+            return
+
+        # 4) Красим СЕРЫМ только НЕ-голубые незанятые позиции.
+        blue_bg = QColor(173, 216, 230)  # цвет seed-подсветки
+        for pos in target_positions:
+            if pos in self.net_positions:
+                continue
+            row = pos - 1
+            item = self.net_table.item(row, 0)
+            if item and item.background().color() != blue_bg:
+                item.setBackground(gray_bg)
+
+    def _get_my_seed_rank(self, player_data):
+        """
+        Определяет номер посева игрока (1, 2, 3, 4) ОТНОСИТЕЛЬНО диапазона
+        мест, выходящих в этот финал.
+        P1 = min(place), P2 = следующее, P3 = следующее, P4 = следующее.
+        Возвращает None, если не удаётся определить.
+        """
+        if not player_data:
+            return None
+        place = player_data.get('place') or 0
+        if not place:
+            return None
+
+        # получаем «nums» — те же места, что используются при загрузке
+        try:
+            final_info = self.parent.real_place_for_final(self.stage_name)
+        except Exception:
+            final_info = None
+        if not final_info or 'place_stage' not in final_info:
+            # fallback: считаем, что place и есть посев (1..4)
+            return place if 1 <= place <= 4 else None
+
+        nums = sorted(final_info['place_stage'])
+        if place not in nums:
+            return None
+        # индекс в nums + 1 = относительный посев
+        return nums.index(place) + 1
+
+    def _source_player_data(self, pos):
+        """Полные данные игрока, занимающего позицию pos (для определения его group/place)."""
+        if pos not in self.net_positions:
+            return None
+        np = self.net_positions[pos]
+        pid = np.get('player_id')
+        # Ищем в all_players
+        for p in getattr(self, 'all_players', []):
+            if p.get('player_id') == pid:
+                return p
+        return None
 
     def get_seed_positions(self, player_index):
         if not hasattr(self.parent, 'setka_choice_number'):
@@ -3320,17 +3469,6 @@ class ManualNetDrawDialog(QDialog):
     # ----------------------------------------------
     # Информация об игроке
     # ----------------------------------------------
-    # def update_player_info(self, player_data):
-    #     if not player_data:
-    #         for key in self.player_info:
-    #             self.player_info[key].setText("-")
-    #         return
-    #     self.player_info['name'].setText(player_data.get('name', "-"))
-    #     self.player_info['city'].setText(player_data.get('city', "-"))
-    #     self.player_info['region'].setText(player_data.get('region', "-"))
-    #     self.player_info['coach'].setText(player_data.get('coach', "-"))
-    #     self.player_info['group'].setText(str(player_data.get('group', "-")))
-
     def update_player_info(self, player_data):
         """Обновляет информацию о текущем игроке (или паре)"""
         if not player_data:
@@ -3357,6 +3495,10 @@ class ManualNetDrawDialog(QDialog):
             self.player_info['coach'].setText(player_data.get('coach', "-"))
             group_num = f"{player_data['group']} группа"
             self.player_info['group'].setText(group_num)
+
+        # ---- подсветка зон посева ----     
+        self.highlight_zones_for_current_player()
+        self.highlight_posev()
     # ----------------------------------------------
     # Загрузка существующей жеребьёвки
     # ----------------------------------------------
@@ -3521,107 +3663,6 @@ class ManualNetDrawDialog(QDialog):
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить жеребьёвку: {str(e)}")
-
-    # def save_drawing(self):
-    #     """Сохранение жеребьёвки в БД"""
-    #     total = len(self.net_positions) + (1 if self.current_player else 0) 
-    #     if total != self.max_players:
-    #         player = Player.get_or_none((Player.title_id == self.title_id) &
-    #                                           (Player.player == "X") &
-    #                                           (Player.sex == self.sex)
-    #                                           )
-    #         # free_num_id = player.id
-    #         # QMessageBox.warning(self, "Ошибка", f"Не все позиции заполнены. Осталось {self.max_players - total}")
-    #         # return
-
-    #     reply = QMessageBox.question(
-    #         self,
-    #         "Подтверждение",
-    #         f"Сохранить жеребьёвку для {self.stage_name}?",
-    #         QMessageBox.Yes | QMessageBox.No
-    #     )
-    #     if reply != QMessageBox.Yes:
-    #         return
-
-    #     try:
-    #         is_pairs = "пары" in self.stage_name.lower()
-
-    #         with db.atomic():
-    #             # Сохраняем новые
-    #             # Собираем все позиции (уже размещённые + текущий, если он есть)
-    #             positions_to_save = dict(self.net_positions)
-    #             if self.current_player and len(positions_to_save) < self.max_players:
-    #             # if self.current_player is None or len(positions_to_save) == self.max_players:
-    #                 # Находим первую свободную позицию для текущего игрока
-    #                 for pos in range(1, self.max_players + 1):
-    #                     if pos not in positions_to_save:
-    #                         # positions_to_save[pos] = {'player_id': free_num_id, 'name': 'X'}
-    #                         positions_to_save[pos] = self.current_player
-    #                         break
-
-    #             for pos, data in positions_to_save.items():
-    #                 if is_pairs:
-    #                     # Для пар сохраняем в Game_list с player_double_id
-    #                     pair_id = data.get('pair_id') or data.get('player_id')
-    #                     Game_list.create(
-    #                         number_group=self.stage_name,
-    #                         rank_num_player=pos,
-    #                         player_double_id=pair_id,
-    #                         system_id=self.current_system.id,
-    #                         title_id=self.title_id,
-    #                         sex=self.sex if self.sex else "man"
-    #                     )
-    #                     # Обновляем posev в Players_double
-    #                     Players_double.update(posev=pos).where(
-    #                         (Players_double.id == pair_id) &
-    #                         (Players_double.title_id == self.title_id)
-    #                     ).execute()
-    #                     # Обновляем posev в Choice_double_player
-    #                     if 'Choice_double_player' in globals():
-    #                         Choice_double_player.update(posev=pos).where(
-    #                             (Choice_double_player.title_id == self.title_id) &
-    #                             (Choice_double_player.player_double_id == pair_id)
-    #                         ).execute()
-    #                 else:
-    #                     # Для личных соревнований (старая логика)
-    #                     Game_list.create(
-    #                         number_group=self.stage_name,
-    #                         rank_num_player=pos,
-    #                         player_group_id=data['player_id'],
-    #                         system_id=self.current_system.id,
-    #                         title_id=self.title_id,
-    #                         sex=self.sex if self.sex else "man"
-    #                     )
-    #                     Choice.update(posev_final=pos, final=self.stage_name).where(
-    #                         (Choice.title_id == self.title_id) &
-    #                         (Choice.player_choice_id == data['player_id'])
-    #                     ).execute()
-    #             # ======= проба свободные номера
-    #             self.free_place_in_setka()
-    #             #---------------------
-    #             if is_pairs:
-    #                 # Создаём записи в Result для пар
-    #                 self.create_results_for_pairs()
-    #             else:
-    #                 # Создаём записи в Result для личных встреч
-
-
-    #             # Устанавливаем флаг choice_flag для системы
-    #             System.update(choice_flag=1).where(System.id == self.current_system.id).execute()
-
-    #         QMessageBox.information(self, "Успех", f"Жеребьёвка для {self.stage_name} сохранена")
-    #         self.accept()
-
-    #         # Переключаем режим на "Результаты" (если это парный этап)
-    #         if is_pairs and hasattr(self.parent, 'radio_results_mode'):
-    #             self.parent.radio_results_mode.setChecked(True)
-    #             self.parent.on_doubles_mode_changed(self.parent.radio_results_mode)
-    #             self.parent.load_doubles_results()
-
-    #     except Exception as e:
-    #         QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить жеребьёвку: {str(e)}")
-    #         import traceback
-    #         traceback.print_exc()
     # ----------------------------------------------
     # Закрытие окна
     # ----------------------------------------------
@@ -3793,15 +3834,6 @@ class ManualNetDrawDialog(QDialog):
         for p in self.players:
             item = PlayerItem(p)
             self.players_list.addItem(item)
-
-    # def get_olympic_bracket_size(self, n: int) -> int:
-    #     size = 2 ** math.ceil(math.log2(max(n, 2)))
-    #     return max(size, 16) if n > 8 else size
-
-
-
-
-
     # ----------------------------------------------
     # Цвета четвертей у сетки
     # ----------------------------------------------
