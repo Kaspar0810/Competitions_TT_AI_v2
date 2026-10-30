@@ -46,6 +46,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import QDate, QTime
 
 
+
 from models import connect_db, close_db
 # from models import *
 from models_qt import (
@@ -56,7 +57,7 @@ from models import (Referee, GskMember, Title, Team, Players_double, Player,
                      Coach, Result, Patronymic, Region, R1_list_d, R1_list_m,
                        R_list_d, R_list_m, Choice, System, City, Players_full,
                          Game_list, Delete_player, Choice_Team, Choice_double_player, db)
-
+# from peewee import JOIN
 import datetime
 from PyQt5.QtWidgets import QMessageBox
 
@@ -7150,8 +7151,13 @@ class MainWindow(QMainWindow):
 
     def on_title_selected(self, item):
         """Выбор соревнования из списка"""
+        
+        
+
         title_id = item.data(Qt.UserRole)
         if title_id:
+            import time
+            start_time = time.perf_counter()
             self.current_title_id = title_id
             title = Title.get_or_none(Title.id == title_id)
             if title:
@@ -7189,14 +7195,16 @@ class MainWindow(QMainWindow):
                 # Обновляем меню финалов
                 self.update_finals_menu_after_selection()
                 
-                # ОБНОВЛЯЕМ АКТИВНОСТЬ ВКЛАДОК
+                # # ОБНОВЛЯЕМ АКТИВНОСТЬ ВКЛАДОК
                 self.update_tabs_enabled()
-                
+                end_time = time.perf_counter()
+                                                                               
+                print(f"Выполнено за {end_time - start_time:.4f} сек")
                 # Обновляем кнопки категорий
                 self.create_category_buttons()
                 
-                # Загружаем участников
-                self.load_participants_for_title()
+                # # Загружаем участников
+                # self.load_participants_for_title()
                 
                 # Переключаемся на вкладку Участники
                 self.tab_widget.setCurrentIndex(1)
@@ -7495,8 +7503,7 @@ class MainWindow(QMainWindow):
                 self.right_panel.setVisible(True)
 
             elif index == 7:  # Дополнительно
-                import time
-                start = time.perf_counter()
+                
                 # Загружаем даты соревнования
                 self.load_competition_dates()
 
@@ -7532,9 +7539,7 @@ class MainWindow(QMainWindow):
                 if self.schedule_stage_combo.count() > 0:
                     self.on_schedule_stage_changed()
 
-                end = time.perf_counter()
-                
-                print(f"Выполнено за {end - start:.4f} сек")
+               
                 #===================
                 self.table_header.setVisible(False)    # скрываем заголовок
                 self.table_container.setVisible(False) # скрываем контейнер с таблицей
@@ -11549,55 +11554,111 @@ class MainWindow(QMainWindow):
         # Просто сохраняем список этапов для использования при активации вкладки
         self._schedule_stages_cache = list(stages)
 
+    # def load_participants_for_title(self):
+    #     """Загрузка участников для выбранного соревнования"""
+    #     if not self.current_title_id:
+    #         self.players_model.setData([])
+    #         self.table_header.setText("👥 Список участников - выберите соревнование")
+    #         return
+        
+    #     try:
+    #         # Фильтруем X
+    #         x_player = Player.get_or_none(
+    #             (Player.player == "X") &
+    #             (Player.fio == "X") &
+    #             (Player.fio_city == "X") &
+    #             (Player.title_id == self.current_title_id)
+    #         )
+    
+    #         if x_player:
+    #             query = Player.select().where((Player.title_id == self.current_title_id) & (Player.player != "X"))
+    #         else:
+    #             query = Player.select().where(Player.title_id == self.current_title_id)
+
+    #         # Применяем фильтр по полу
+    #         if self.current_sex == "woman":
+    #             query = query.where(Player.sex == "woman")
+    #         elif self.current_sex == "man":
+    #             query = query.where(Player.sex == "man")
+            
+    #         # # Сортируем по рейтингу
+    #         # query = query.order_by(Player.rank.desc())
+            
+    #         participants_data = []
+    #         # ===========
+    #         from peewee import JOIN
+
+    #         query = (Player
+    #                 .select(Player, Coach)
+    #                 .join(Coach, on=(Player.coach_id == Coach.id), attr='coach_obj',
+    #                     join_type=JOIN.LEFT_OUTER)
+    #                 .where(...)
+    #                 .order_by(Player.rank.desc()))
+    #         #===========
+    #         for player in query:
+    #             # coach_name = ""
+    #             # if player.coach_id:
+    #             #     coach = Coach.get_or_none(Coach.id == player.coach_id)
+    #             #     if coach:
+    #             #         coach_name = coach.coach
+    #             coach_name = player.coach_obj.coach if getattr(player, 'coach_obj', None) else ""
+                
+    #             participants_data.append({
+    #                 'id': player.id,
+    #                 'fio': player.fio or player.player or "",
+    #                 'birth_date': player.bday,
+    #                 'rank': player.rank or 0,
+    #                 'city': player.city or "",
+    #                 'region': player.region or "",
+    #                 'razryad': player.razryad or "",
+    #                 'coach': coach_name,
+    #                 'sex': player.sex or "",
+    #                 'application': player.application or "предварительная"
+    #             })
+            
+    #         self.players_model.setData(participants_data)
+    #         self.update_table_header()
+            
+    #     except Exception as e:
+    #         print(f"Ошибка загрузки участников: {e}")
+    #         self.players_model.setData([])
+
+    # проба оптимизации ===
+    
+
     def load_participants_for_title(self):
-        """Загрузка участников для выбранного соревнования"""
         if not self.current_title_id:
             self.players_model.setData([])
-            self.table_header.setText("👥 Список участников - выберите соревнование")
             return
-        
+
         try:
-            # Фильтруем X
             x_player = Player.get_or_none(
-                (Player.player == "X") &
-                (Player.fio == "X") &
+                (Player.player == "X") & (Player.fio == "X") &
                 (Player.fio_city == "X") &
                 (Player.title_id == self.current_title_id)
             )
-    
+
+            base_q = (Player.select(Player, Coach).where(Player.title_id == self.current_title_id)
+                        .join(Coach, on=(Player.coach_id == Coach.id),
+                            attr='coach_obj')
+            )
+
             if x_player:
-                query = Player.select().where((Player.title_id == self.current_title_id) & (Player.player != "X"))
-            else:
-                query = Player.select().where(Player.title_id == self.current_title_id)
+                base_q = base_q.where(Player.player != "X")
 
-            # Применяем фильтр по полу
             if self.current_sex == "woman":
-                query = query.where(Player.sex == "woman")
+                base_q = base_q.where(Player.sex == "woman")
             elif self.current_sex == "man":
-                query = query.where(Player.sex == "man")
-            
-            # # Сортируем по рейтингу
-            # query = query.order_by(Player.rank.desc())
-            
-            participants_data = []
-            # ===========
-            from peewee import JOIN
+                base_q = base_q.where(Player.sex == "man")
 
-            query = (Player
-                    .select(Player, Coach)
-                    .join(Coach, on=(Player.coach_id == Coach.id), attr='coach_obj',
-                        join_type=JOIN.LEFT_OUTER)
-                    .where(...)
-                    .order_by(Player.rank.desc()))
-            #===========
-            for player in query:
-                # coach_name = ""
-                # if player.coach_id:
-                #     coach = Coach.get_or_none(Coach.id == player.coach_id)
-                #     if coach:
-                #         coach_name = coach.coach
-                coach_name = player.coach_obj.coach if getattr(player, 'coach_obj', None) else ""
-                
+            base_q = base_q.order_by(Player.rank.desc())
+
+            participants_data = []
+            for player in base_q:
+                coach_name = ""
+                if getattr(player, 'coach_obj', None):
+                    coach_name = player.coach_obj.coach or ""
+
                 participants_data.append({
                     'id': player.id,
                     'fio': player.fio or player.player or "",
@@ -11610,13 +11671,13 @@ class MainWindow(QMainWindow):
                     'sex': player.sex or "",
                     'application': player.application or "предварительная"
                 })
-            
+
             self.players_model.setData(participants_data)
             self.update_table_header()
-            
         except Exception as e:
             print(f"Ошибка загрузки участников: {e}")
             self.players_model.setData([])
+    #============
 
     def load_last_competition(self):
         """Загрузка последнего соревнования по умолчанию"""
