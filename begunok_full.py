@@ -1,4 +1,6 @@
 import os
+import sys
+
 from sys import platform
 from datetime import datetime
 from reportlab.pdfgen import canvas
@@ -11,14 +13,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.platypus import SimpleDocTemplate, Spacer
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
-
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
-
-
-
-import sys
-# import os
 
 def resource_path(relative_path):
     """Возвращает путь к ресурсу, работая и в IDE, и в собранном exe."""
@@ -39,15 +35,6 @@ pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', font_path))
 font_path = resource_path(os.path.join("font", "DejaVuSerif-Italic.ttf"))
 pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', font_path))
 
-# # Регистрация шрифта для кириллицы
-# registerFontFamily('DejaVuSerif', normal='DejaVuSerif',
-#                    bold='DejaVuSerif-Bold', italic='DejaVuSerif-Italic')
-# outpath = os.path.join(os.getcwd(), 'font')
-# pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(outpath, 'DejaVuSans.ttf')))
-# pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(outpath, 'DejaVuSans-Bold.ttf')))
-# pdfmetrics.registerFont(TTFont('DejaVuSerif', os.path.join(outpath, 'DejaVuSerif.ttf')))
-# pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', os.path.join(outpath, 'DejaVuSerif-Bold.ttf')))
-# pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', os.path.join(outpath, 'DejaVuSerif-Italic.ttf')))
 # Стили для текста
 styles = getSampleStyleSheet()
 

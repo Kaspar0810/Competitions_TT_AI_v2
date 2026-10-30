@@ -1,11 +1,74 @@
 # db_setup.py или в начале main_AI.py
 import sys
-import os
+import os, csv
 import subprocess
 from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QLineEdit, QFormLayout, QHBoxLayout
 from PyQt5.QtCore import Qt
-from models import db, Title, Region, Patronymic, Coach  # импортируйте вашу БД и модели
+from models import db, Title, Region, Patronymic, Coach, Players_full, City, Referee  # импортируйте вашу БД и модели
 from import_initial_data import InitialDataImportDialog
+
+def offer_initial_import(self):
+    """Предлагает пользователю загрузить данные из экспортированных таблиц."""
+    reply = QMessageBox.question(
+        self,
+        "Импорт начальных данных",
+        "База данных создана. Хотите загрузить данные из таблиц,\n"
+        "экспортированных из MySQL Workbench?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes
+    )
+    if reply != QMessageBox.Yes:
+        return
+
+    folder = QFileDialog.getExistingDirectory(
+        self, "Выберите папку с экспортированными таблицами (*.csv)"
+    )
+    if not folder:
+        return
+
+    # Порядок важен: сначала справочники, потом зависимые таблицы
+    # (иначе будут нарушены внешние ключи)
+    tables_in_order = [
+        ("Coachs.csv", Coach),
+        ("Patronymic.csv", Patronymic),
+        ("Citys.csv", City),
+        ("Players_full.csv", Players_full),
+        ("Referee.csv", Referee),
+        # добавьте остальные в правильном порядке
+    ]
+
+    imported, skipped = [], []
+    with db.atomic():  # транзакция peewee — либо всё, либо ничего
+        for filename, model in tables_in_order:
+            path = os.path.join(folder, filename)
+            if not os.path.exists(path):
+                skipped.append(filename)
+                continue
+
+            # читаем CSV, у которого первая строка — заголовки
+            with open(path, encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                rows = [self._normalize_row(r, model) for r in reader]
+                if rows:
+                    model.insert_many(rows).execute()
+            imported.append(filename)
+
+    msg = f"Импортировано: {len(imported)} файлов."
+    if skipped:
+        msg += "\nПропущены (нет файла): " + ", ".join(skipped)
+    QMessageBox.information(self, "Готово", msg)
+
+def _normalize_row(self, row, model):
+    """Приводит пустые строки вроде '' или 'NULL' к None."""
+    result = {}
+    for field in model._meta.fields:
+        name = field.name
+        val = row.get(name)
+        if val is None or val == "" or val.upper() == "NULL":
+            result[name] = None
+        else:
+            result[name] = val
+    return result
 
 def check_database_connection():
     """Проверяет подключение к БД и наличие таблиц."""
@@ -37,7 +100,8 @@ def run_mysql_installer():
     if installer_path:
         try:
             # Запускаем установщик
-            subprocess.Popen([installer_path])
+            # subprocess.Popen([installer_path])
+            subprocess.Popen(["msiexec", "/i", r"installer_path\mysql-installer.msi"])
             QMessageBox.information(None, "Установка MySQL", 
                                     "Установщик MySQL запущен.\n"
                                     "После завершения установки перезапустите приложение.")
@@ -118,6 +182,7 @@ def setup_database():
                     from models import update_db_credentials
                     update_db_credentials(creds[0], creds[1])
                     if check_database_connection():
+                        offer_initial_import()
                         return True
         else:
             QMessageBox.critical(None, "Ошибка", "Установка MySQL не выполнена.")

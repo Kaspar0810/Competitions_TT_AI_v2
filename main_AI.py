@@ -19,9 +19,8 @@ from PyQt5.QtCore import QTimer, QTime
 from PyQt5.QtWidgets import QCompleter,  QSpinBox
 from PyQt5.QtCore import QStringListModel
 from PyQt5.QtWidgets import QStackedWidget, QTableWidget, QTableWidgetItem, QTimeEdit
-from PyQt5.QtCore import QMimeData, QEvent
+from PyQt5.QtCore import QMimeData, QEvent, QSettings
 from PyQt5.QtGui import QDrag
-
 
 from datetime import date, datetime, time as dtime, timedelta
 
@@ -90,8 +89,16 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Проверка актуальности рейтинга через 1.5 секунды после запуска
-        QTimer.singleShot(1500, self.check_rating_actual)
+        settings = QSettings("MyOrg", "TT_Competitions")
+        is_first_run = settings.value("first_run", True, type=bool)
+
+        if not is_first_run:
+            # self.check_rating_relevance()
+            self.check_rating_actual
+        else:
+            settings.setValue("first_run", False)
+        # # Проверка актуальности рейтинга через 1.5 секунды после запуска
+        # QTimer.singleShot(1500, self.check_rating_actual)
 
         # Проверка старых бэкапов при запуске (через 5 секунды после загрузки)
         QTimer.singleShot(2000, self.check_old_backups_on_startup)
@@ -197,6 +204,8 @@ class MainWindow(QMainWindow):
         self.is_editing_mode = False  # Флаг режима редактирования
 
 
+
+    
 # import sys
 # import os
 
@@ -4497,7 +4506,7 @@ class MainWindow(QMainWindow):
         label_vozrast = QLabel("Возраст:")
         label_vozrast.setMinimumWidth(80)
         self.new_comp_vozrast = QComboBox()
-        self.new_comp_vozrast.addItems(["до 12 лет", "до 14 лет", "до 16 лет", "до 18 лет", "до 20 лет", "до 22 лет", "22 года и старше"])
+        self.new_comp_vozrast.addItems(["до 12 лет", "до 14 лет", "до 16 лет", "до 18 лет", "до 20 лет", "до 22 лет", "до 26 лет", "22 года и старше"])
         self.new_comp_vozrast.setStyleSheet("padding: 5px; font-size: 11px;")
         row2.addWidget(label_vozrast)
         row2.addWidget(self.new_comp_vozrast, 1)
@@ -7397,7 +7406,7 @@ class MainWindow(QMainWindow):
 
         elif index == 3:  # Пары
 
-            self.update_left_panel_for_tab(index)
+            # self.update_left_panel_for_tab(index)
 
             # Восстанавливаем режим
             if hasattr(self, 'doubles_mode') and self.doubles_mode == "results":
@@ -8836,12 +8845,12 @@ class MainWindow(QMainWindow):
         # Проверяем возраст участника
         age_check_result = self.check_player_age(birth_date, competition_start_date, title.vozrast)
         
-        if age_check_result == "too_young":
+        if age_check_result[0] == "too_young":
             QMessageBox.warning(self, "Ошибка", 
-                            f"Игроку нет 8 лет на дату начала соревнования ({competition_start_date.strftime('%d.%m.%Y')}).\n"
-                            f"Минимальный возраст для участия - 8 лет.")
+                            f"Игроку {age_check_result[1]} лет на дату начала соревнования ({competition_start_date.strftime('%d.%m.%Y')}).\n"
+                            f"Минимальный возраст для участия - {age_check_result[2]} лет.")
             return
-        elif age_check_result == "too_old":
+        elif age_check_result[0] == "too_old":
             QMessageBox.warning(self, "Ошибка", 
                             f"Игрок превышает возрастное ограничение ({title.vozrast}).\n"
                             f"На год соревнования ({competition_start_date.strftime('%d.%m.%Y')}) игроку должно быть не более {self.get_max_age_from_text(title.vozrast)} лет.")
@@ -11567,16 +11576,27 @@ class MainWindow(QMainWindow):
             elif self.current_sex == "man":
                 query = query.where(Player.sex == "man")
             
-            # Сортируем по рейтингу
-            query = query.order_by(Player.rank.desc())
+            # # Сортируем по рейтингу
+            # query = query.order_by(Player.rank.desc())
             
             participants_data = []
+            # ===========
+            from peewee import JOIN
+
+            query = (Player
+                    .select(Player, Coach)
+                    .join(Coach, on=(Player.coach_id == Coach.id), attr='coach_obj',
+                        join_type=JOIN.LEFT_OUTER)
+                    .where(...)
+                    .order_by(Player.rank.desc()))
+            #===========
             for player in query:
-                coach_name = ""
-                if player.coach_id:
-                    coach = Coach.get_or_none(Coach.id == player.coach_id)
-                    if coach:
-                        coach_name = coach.coach
+                # coach_name = ""
+                # if player.coach_id:
+                #     coach = Coach.get_or_none(Coach.id == player.coach_id)
+                #     if coach:
+                #         coach_name = coach.coach
+                coach_name = player.coach_obj.coach if getattr(player, 'coach_obj', None) else ""
                 
                 participants_data.append({
                     'id': player.id,
@@ -11688,30 +11708,165 @@ class MainWindow(QMainWindow):
                     border-radius: 3px;
                 """)    
 
-    def check_player_age(self, birth_date, competition_start_date, age_limit_text):
-        """Проверка возраста участника"""
-        if not birth_date or not competition_start_date:
+    # def check_player_age(self, birth_date, competition_start_date, age_limit_text):
+    #     """Проверка возраста участника"""
+    #     if not birth_date or not competition_start_date:
+    #         return "ok"
+        
+    #     # Вычисляем возраст на дату начала соревнования
+    #     age_at_competition = competition_start_date.year - birth_date.year
+    #     # Корректировка, если день рождения еще не наступил
+    #     if (competition_start_date.month, competition_start_date.day) < (birth_date.month, birth_date.day):
+    #         age_at_competition -= 1
+        
+    #     # Проверяем минимальный возраст (8 лет)
+    #     if age_at_competition < 8:
+    #         return "too_young"
+        
+    #     # Получаем максимальный возраст из текста ограничения
+    #     max_age = self.get_max_age_from_text(age_limit_text)
+        
+    #     # Проверяем максимальный возраст
+    #     if max_age is not None and age_at_competition >= max_age:
+    #         return "too_old"
+        
+    #     return "ok"
+# ========== новая проверка на возраст =====
+    def check_player_age(self, birth_date, competition_start_date,
+                         age_limit_text, title=None):
+        """
+        Проверка возраста участника по правилам ФНТР.
+
+        birth_date — дата рождения (date)
+        competition_start_date — дата проверки (УЖЕ 1-й игровой день,
+                                 если title=None); сдвиг НЕ применяется
+        age_limit_text — Title.vozrast
+        title — объект Title (если передан, используем его 1-й игровой день
+                из get_competition_first_play_day; иначе — competition_start_date)
+
+        Возвращает: "too_young" / "too_old" / "ok" / "error:<причина>"
+        """
+        result = [
+
+        ]
+        if not birth_date:
             return "ok"
-        
-        # Вычисляем возраст на дату начала соревнования
-        age_at_competition = competition_start_date.year - birth_date.year
-        # Корректировка, если день рождения еще не наступил
-        if (competition_start_date.month, competition_start_date.day) < (birth_date.month, birth_date.day):
-            age_at_competition -= 1
-        
-        # Проверяем минимальный возраст (8 лет)
-        if age_at_competition < 8:
-            return "too_young"
-        
-        # Получаем максимальный возраст из текста ограничения
-        max_age = self.get_max_age_from_text(age_limit_text)
-        
-        # Проверяем максимальный возраст
-        if max_age is not None and age_at_competition >= max_age:
-            return "too_old"
-        
+
+        # --- 1. Опорная дата ---
+        if title is not None:
+            check_day = self.get_competition_first_play_day(title)
+        else:
+            # competition_start_date — уже дата проверки, без сдвига
+            check_day = competition_start_date
+
+        if not check_day:
+            return "error:нет даты для проверки возраста"
+
+        # --- 2. Возраст на опорную дату ---
+        age_at_check = self._age_on_date(birth_date, check_day)
+        if age_at_check is None:
+            return "error:не удалось вычислить возраст"
+
+        # --- 3. Разбор ограничения ---
+        age_info = self.parse_age_limit(age_limit_text)
+        if age_info is None:
+            return "ok"
+
+        min_age = age_info.get('min_age')
+        max_age_year = age_info.get('max_age_year')
+
+        # --- 4. Не моложе ---
+        if min_age is not None and age_at_check < min_age:
+            result = ["too_young", age_at_check, min_age]
+            return result
+
+        # --- 5. Не старше (по календарному году) ---
+        if max_age_year is not None:
+            age_in_comp_year = check_day.year - birth_date.year
+            if age_in_comp_year >= max_age_year:
+                result = ["too_old", age_at_check, max_age_year]
+                return result
+
         return "ok"
 
+    @staticmethod
+    def _age_on_date(birth_date, check_date):
+        """Полных лет на дату (без ручной корректировки)."""
+        if not birth_date or not check_date:
+            return None
+        try:
+            bd_this_year = birth_date.replace(year=check_date.year)
+        except ValueError:
+            # 29 февраля в невисокосный год
+            bd_this_year = birth_date.replace(year=check_date.year, day=28)
+        if bd_this_year > check_date:
+            return check_date.year - birth_date.year - 1
+        return check_date.year - birth_date.year
+
+    def get_competition_first_play_day(self, title):
+        """
+        1-й игровой день соревнования.
+        По правилам: день приезда = data_start, 1-й игровой = следующий день.
+        Если data_start == data_end — считаем этот день игровым (1-дневный турнир).
+        """
+        if not title or not title.data_start:
+            return None
+        from datetime import timedelta
+        start = title.data_start
+        end = title.data_end or start
+        if end <= start:
+            return start
+        return start + timedelta(days=1)
+
+    def parse_age_limit(self, age_limit_text):
+        """
+        Разбирает строку возраста из Title.vozrast.
+        Возвращает dict:
+            {
+                'min_age': int|None,     # нижняя граница (по 1-му игровому дню)
+                'max_age_year': int|None # «до N лет» — предел по календарному году
+            }
+        или None, если строку не удалось разобрать.
+        """
+        if not age_limit_text:
+            return None
+
+        text = str(age_limit_text).strip().lower().replace('ё', 'е')
+
+        # ---------- 22 года и старше / 22 и старше ----------
+        if ('22' in text and 'старше' in text) or ('22+' in text):
+            return {'min_age': 14, 'max_age_year': None}
+
+        # ---------- до 26 лет: [17 .. 25] ----------
+        if '26' in text and 'до' in text:
+            return {'min_age': 17, 'max_age_year': 26}
+
+        # ---------- до 22 лет ----------
+        if '22' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 22}
+
+        # ---------- до 20 лет ----------
+        if '20' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 20}
+
+        # ---------- до 18 лет ----------
+        if '18' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 18}
+
+        # ---------- до 16 лет ----------
+        if '16' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 16}
+
+        # ---------- до 14 лет ----------
+        if '14' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 14}
+
+        # ---------- до 12 лет ----------
+        if '12' in text and 'до' in text:
+            return {'min_age': 8, 'max_age_year': 12}
+
+        return None
+# =================
     def get_max_age_from_text(self, age_text):
         """Извлечение максимального возраста из текста (например 'до 16 лет' -> 16, 'U16' -> 16)"""
         if not age_text:
@@ -14351,6 +14506,9 @@ class MainWindow(QMainWindow):
             
             # Первый проход: определяем максимальную ширину
             temp_games_list = []
+            # total_players = Player.select().where(
+            #                     (Player.title_id == self.current_title_id) &
+            #                     (Player.sex == sex)).count()
             for system in systems:
                 total_players = Player.select().where(
                     (Player.title_id == self.current_title_id) &
@@ -35684,13 +35842,5 @@ if __name__ == "__main__":
     font_path = resource_path(os.path.join("font", "DejaVuSerif-Italic.ttf"))
     pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', font_path))
 
-    # registerFontFamily('DejaVuSerif', normal='DejaVuSerif',
-    #                bold='DejaVuSerif-Bold', italic='DejaVuSerif-Italic')
-    # outpath = os.path.join(os.getcwd(), 'font')
-    # pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(outpath, 'DejaVuSans.ttf')))
-    # pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(outpath, 'DejaVuSans-Bold.ttf')))
-    # pdfmetrics.registerFont(TTFont('DejaVuSerif', os.path.join(outpath, 'DejaVuSerif.ttf')))
-    # pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', os.path.join(outpath, 'DejaVuSerif-Bold.ttf')))
-    # pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', os.path.join(outpath, 'DejaVuSerif-Italic.ttf')))
 
     main()
