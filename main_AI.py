@@ -4200,14 +4200,6 @@ class MainWindow(QMainWindow):
         self.doubles_total_score1.setMaximumWidth(50)
         score_layout.addWidget(self.doubles_total_score1, 1, 2)
 
-        # for i in range(5):
-        #     edit = QLineEdit()
-        #     edit.setMaximumWidth(35)
-        #     edit.setEnabled(False)
-        #     edit.textChanged.connect(self.update_doubles_total_score)
-        #     score_layout.addWidget(edit, 1, 3 + i)
-        #     self.doubles_score_edits_p1[i] = edit
-
         # Для полей первой пары
         for i in range(5):
             edit = QLineEdit()
@@ -4233,15 +4225,6 @@ class MainWindow(QMainWindow):
         self.doubles_total_score2 = QLineEdit()
         self.doubles_total_score2.setMaximumWidth(50)
         score_layout.addWidget(self.doubles_total_score2, 2, 2)
-
-        # for i in range(5):
-        #     edit = QLineEdit()
-        #     edit.setMaximumWidth(35)
-        #     edit.setEnabled(False)
-        #     edit.textChanged.connect(self.update_doubles_total_score)
-        #     score_layout.addWidget(edit, 2, 3 + i)
-        #     self.doubles_score_edits_p2[i] = edit
-
     # ===============
         # Для полей второй пары
         for i in range(5):
@@ -4914,9 +4897,41 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Ошибка загрузки матчей: {e}")
 
+    # def on_schedule_stage_changed(self):
+    #     stage_name = self.schedule_stage_combo.currentText()
+
+    #     if not stage_name:
+    #         return
+
+    #     # Синхронизируем с бегунками
+    #     self.sync_schedule_stage_to_runner(stage_name)
+
+    #     system = System.get_or_none(
+    #         (System.title_id == self.current_title_id) &
+    #         (System.sex == self.current_sex) &
+    #         (System.stage == stage_name)
+    #     )
+    #     if not system:
+    #         self.status_label.setText(f"❌ Система для этапа '{stage_name}' не найдена")
+    #         self.schedule_table.setRowCount(0)
+    #         return
+
+    #     # Проверку на олимпийскую систему убираем – загружаем все этапы
+    #     self.max_tables = self.get_competition_tables()
+
+    #     self.load_schedule_matches(stage_name)
+    #     # Сбрасываем фильтры (показываем все строки)
+    #     for row in range(self.schedule_table.rowCount()):
+    #         self.schedule_table.setRowHidden(row, False)
+    #         # Обновляем комбобокс стадий
+    #         self.update_stage_filter_combo()
+    #         # Обновляем фильтры даты и времени
+    #         self.update_schedule_filter_combos()
+    #         # Сбрасываем скрытие строк
+    #         for row in range(self.schedule_table.rowCount()):
+    #             self.schedule_table.setRowHidden(row, False)
     def on_schedule_stage_changed(self):
         stage_name = self.schedule_stage_combo.currentText()
-
         if not stage_name:
             return
 
@@ -4933,20 +4948,19 @@ class MainWindow(QMainWindow):
             self.schedule_table.setRowCount(0)
             return
 
-        # Проверку на олимпийскую систему убираем – загружаем все этапы
         self.max_tables = self.get_competition_tables()
 
+        # 1) Один раз загружаем таблицу
         self.load_schedule_matches(stage_name)
-        # Сбрасываем фильтры (показываем все строки)
-        for row in range(self.schedule_table.rowCount()):
+
+        # 2) Один раз сбрасываем скрытие всех строк
+        row_count = self.schedule_table.rowCount()
+        for row in range(row_count):
             self.schedule_table.setRowHidden(row, False)
-            # Обновляем комбобокс стадий
-            self.update_stage_filter_combo()
-            # Обновляем фильтры даты и времени
-            self.update_schedule_filter_combos()
-            # Сбрасываем скрытие строк
-            for row in range(self.schedule_table.rowCount()):
-                self.schedule_table.setRowHidden(row, False)
+
+        # 3) Один раз обновляем комбобоксы фильтров
+        self.update_stage_filter_combo()
+        self.update_schedule_filter_combos()
 
     def assign_tables_sequentially(self):
         """Назначить столы по порядку для выбранных строк (или всех, если ничего не выбрано)"""
@@ -5479,27 +5493,42 @@ class MainWindow(QMainWindow):
 
     def update_schedule_filter_combos(self):
         """Обновляет комбобоксы фильтров даты и времени на основе расписания"""
+        # Фильтры создаются в update_left_panel_for_extra_tab (вкладка 7).
+        # Если они ещё не созданы — выходим без ошибки.
+        if not hasattr(self, 'schedule_date_filter_combo') \
+                or self.schedule_date_filter_combo is None:
+            return
+        if not hasattr(self, 'schedule_time_filter_combo') \
+                or self.schedule_time_filter_combo is None:
+            return
+
         # Блокируем сигналы, чтобы избежать рекурсии
         self.schedule_date_filter_combo.blockSignals(True)
         self.schedule_time_filter_combo.blockSignals(True)
 
-        # Заполняем даты
-        self.schedule_date_filter_combo.clear()
-        self.schedule_date_filter_combo.addItem("Все даты")
-        dates = self.get_schedule_dates()
-        for date_obj in dates:
-            if date_obj:
-                self.schedule_date_filter_combo.addItem(date_obj.strftime("%d.%m.%Y"))
+        try:
+            # Заполняем даты
+            self.schedule_date_filter_combo.clear()
+            self.schedule_date_filter_combo.addItem("Все даты")
+            for date_obj in self.get_schedule_dates():
+                if date_obj:
+                    self.schedule_date_filter_combo.addItem(date_obj.strftime("%d.%m.%Y"))
 
-        # Заполняем время (пока все, т.к. дата = 'Все даты')
-        self.schedule_time_filter_combo.clear()
-        self.schedule_time_filter_combo.addItem("Все время")
-        times = self.get_schedule_times("Все даты")
-        for time_obj in times:
-            self.schedule_time_filter_combo.addItem(time_obj.strftime("%H:%M"))
-
-        self.schedule_date_filter_combo.blockSignals(False)
-        self.schedule_time_filter_combo.blockSignals(False)
+            # Заполняем время (пока все, т.к. дата = 'Все даты')
+            self.schedule_time_filter_combo.clear()
+            self.schedule_time_filter_combo.addItem("Все время")
+            for time_obj in self.get_schedule_times("Все даты"):
+                self.schedule_time_filter_combo.addItem(time_obj.strftime("%H:%M"))
+        finally:
+            # Разблокируем сигналы даже если что-то упало
+            try:
+                self.schedule_date_filter_combo.blockSignals(False)
+            except RuntimeError:
+                self.schedule_date_filter_combo = None
+            try:
+                self.schedule_time_filter_combo.blockSignals(False)
+            except RuntimeError:
+                self.schedule_time_filter_combo = None
 
         # Применяем фильтры (показываем все строки)
         self.apply_schedule_filters()
@@ -7197,14 +7226,12 @@ class MainWindow(QMainWindow):
                 
                 # # ОБНОВЛЯЕМ АКТИВНОСТЬ ВКЛАДОК
                 self.update_tabs_enabled()
-                end_time = time.perf_counter()
-                                                                               
-                print(f"Выполнено за {end_time - start_time:.4f} сек")
+                
                 # Обновляем кнопки категорий
                 self.create_category_buttons()
                 
                 # # Загружаем участников
-                # self.load_participants_for_title()
+                self.load_participants_for_title()
                 
                 # Переключаемся на вкладку Участники
                 self.tab_widget.setCurrentIndex(1)
@@ -7477,7 +7504,6 @@ class MainWindow(QMainWindow):
         # Для остальных вкладок
         else:
             # Показываем таблицу участников (или можно скрыть)
-            # self.table_container.setCurrentWidget(self.table_view)
             if index == 0:  # Титул
                 self.table_header.setText("📋 Информация о соревновании")
                 self.filters_widget.setVisible(True)
@@ -8477,6 +8503,15 @@ class MainWindow(QMainWindow):
         self._updating_left_panel = True
         
         try:
+            # Обнуляем ссылки на виджеты, которые сейчас будут удалены
+            # (иначе они «повиснут» как удалённые C++-объекты и вызовут RuntimeError)
+            for attr in (
+                'schedule_date_filter_combo',
+                'schedule_time_filter_combo',
+                'schedule_stage_filter_combo',
+            ):
+                if hasattr(self, attr):
+                    setattr(self, attr, None)
             # ПОЛНАЯ ОЧИСТКА ЛЕВОЙ ПАНЕЛИ
             while self.dynamic_filters_layout.count():
                 item = self.dynamic_filters_layout.takeAt(0)
@@ -11247,25 +11282,30 @@ class MainWindow(QMainWindow):
             print(f"Ошибка установки даты рейтинга: {e}")
 
     def update_tabs_enabled(self):
-        """Обновление активности вкладок в зависимости от tab_enabled"""
+        """Обновление активности вкладок в зависимости от tab_enabled."""
+        import time
+        start_time = time.perf_counter()
+
         if not self.current_title_id:
-            for i in range(self.tab_widget.count()):
-                self.tab_widget.setTabEnabled(i, False)
-            self.tab_widget.setTabEnabled(0, True)
-            self.tab_widget.setCurrentIndex(0)
+            self.tab_widget.blockSignals(True)
+            try:
+                for i in range(self.tab_widget.count()):
+                    self.tab_widget.setTabEnabled(i, False)
+                self.tab_widget.setTabEnabled(0, True)
+                self.tab_widget.setCurrentIndex(0)
+            finally:
+                self.tab_widget.blockSignals(False)
             return
-        
+
         try:
             title = Title.get_by_id(self.current_title_id)
             tab_enabled = title.tab_enabled if title.tab_enabled else "Титул"
-            
-            # Добавляем вкладку Дополнительно по умолчанию, если её нет
+
             if "Дополнительно" not in tab_enabled:
                 tab_enabled += " Дополнительно"
                 title.tab_enabled = tab_enabled
                 title.save()
 
-            # Словарь соответствия названий вкладок их индексам
             tab_dict = {
                 'Титул': 0,
                 'Участники': 1,
@@ -11276,36 +11316,58 @@ class MainWindow(QMainWindow):
                 'Рейтинг': 6,
                 'Дополнительно': 7
             }
-            
-            # Сначала отключаем все вкладки
-            for i in range(self.tab_widget.count()):
-                self.tab_widget.setTabEnabled(i, False)
-            
-            # Разбираем строку tab_enabled (формат: "Титул Участники Система")
-            enabled_tabs = tab_enabled.split()
-            
-            # Активируем указанные вкладки
-            for tab_name in enabled_tabs:
-                if tab_name in tab_dict:
-                    idx = tab_dict[tab_name]
-                    self.tab_widget.setTabEnabled(idx, True)
-            
-            # Если ни одна вкладка не активирована, активируем только Титул
-            if not any(self.tab_widget.isTabEnabled(i) for i in range(self.tab_widget.count())):
-                self.tab_widget.setTabEnabled(0, True)
-            
-            # Если текущая вкладка неактивна, переключаемся на Титул
-            if not self.tab_widget.isTabEnabled(self.tab_widget.currentIndex()):
-                self.tab_widget.setCurrentIndex(0)
-            
-            print(f"Активированы вкладки: {enabled_tabs}")
-            
+
+            prev_index = self.tab_widget.currentIndex()
+
+            # Блокируем сигналы — ни одно setTabEnabled/setCurrentIndex
+            # не вызовет on_tab_changed во время перестройки
+            self.tab_widget.blockSignals(True)
+            try:
+                for i in range(self.tab_widget.count()):
+                    self.tab_widget.setTabEnabled(i, False)
+
+                enabled_tabs = tab_enabled.split()
+                for tab_name in enabled_tabs:
+                    if tab_name in tab_dict:
+                        idx = tab_dict[tab_name]
+                        self.tab_widget.setTabEnabled(idx, True)
+
+                if not any(self.tab_widget.isTabEnabled(i)
+                        for i in range(self.tab_widget.count())):
+                    self.tab_widget.setTabEnabled(0, True)
+
+                # Куда переключиться
+                if not self.tab_widget.isTabEnabled(prev_index):
+                    new_index = 0
+                else:
+                    new_index = prev_index
+                self.tab_widget.setCurrentIndex(new_index)
+            finally:
+                self.tab_widget.blockSignals(False)
+
+            # Один раз вручную вызываем on_tab_changed для новой вкладки,
+            # если индекс сменился — чтобы интерфейс обновился
+            if self.tab_widget.currentIndex() != prev_index:
+                try:
+                    self.on_tab_changed(self.tab_widget.currentIndex())
+                except Exception as e:
+                    print(f"on_tab_changed после update_tabs_enabled: {e}")
+
+            print(f"Активированы вкладки: {tab_enabled.split()}")
+            end_time = time.perf_counter()
+            print(f"update_tabs_enabled выполнено за {end_time - start_time:.4f} сек")
+
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Ошибка обновления вкладок: {e}")
-            # По умолчанию активируем только Титул
-            for i in range(self.tab_widget.count()):
-                self.tab_widget.setTabEnabled(i, False)
-            self.tab_widget.setTabEnabled(0, True)
+            self.tab_widget.blockSignals(True)
+            try:
+                for i in range(self.tab_widget.count()):
+                    self.tab_widget.setTabEnabled(i, False)
+                self.tab_widget.setTabEnabled(0, True)
+            finally:
+                self.tab_widget.blockSignals(False)
         
     def find_similar_competitions(self, name, start_date, end_date):
         """Поиск похожих соревнований для группировки"""
