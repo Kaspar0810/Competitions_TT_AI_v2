@@ -11283,8 +11283,8 @@ class MainWindow(QMainWindow):
 
     def update_tabs_enabled(self):
         """Обновление активности вкладок в зависимости от tab_enabled."""
-        import time
-        start_time = time.perf_counter()
+        # import time
+        # start_time = time.perf_counter()
 
         if not self.current_title_id:
             self.tab_widget.blockSignals(True)
@@ -11353,9 +11353,9 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     print(f"on_tab_changed после update_tabs_enabled: {e}")
 
-            print(f"Активированы вкладки: {tab_enabled.split()}")
-            end_time = time.perf_counter()
-            print(f"update_tabs_enabled выполнено за {end_time - start_time:.4f} сек")
+            # print(f"Активированы вкладки: {tab_enabled.split()}")
+            # end_time = time.perf_counter()
+            # print(f"update_tabs_enabled выполнено за {end_time - start_time:.4f} сек")
 
         except Exception as e:
             import traceback
@@ -24840,7 +24840,7 @@ class MainWindow(QMainWindow):
         dlg.exec_()
 
     def view_plan_dialog(self):
-        """Открыть редактор плана (Просмотр) — read-only, данные из БД"""
+        """Открыть существующий план в режиме редактирования (данные из БД)."""
         if not self.current_title_id:
             QMessageBox.warning(self, "Ошибка", "Сначала выберите соревнование")
             return
@@ -24851,10 +24851,31 @@ class MainWindow(QMainWindow):
         dlg = PlanDialog(
             self, self.current_title_id,
             table_count=max_tables,
-            read_only=True,
+            read_only=False,         # ← теперь редактирование
             load_from_db=True,
         )
         dlg.exec_()
+
+    # def closeEvent(self, event):
+    #     if self.read_only:
+    #         event.accept()
+    #         return
+    #     current_ids = {v['res_id'] for v in self.placed.values()}
+    #     has_changes = (
+    #         set(self.loaded_res_ids) != current_ids
+    #         or set(self.placed.keys()) != set(self.loaded_placed_keys)
+    #     )
+    #     if has_changes:
+    #         reply = QMessageBox.question(
+    #             self, "Несохранённые изменения",
+    #             "В плане есть несохранённые изменения.\nЗакрыть без сохранения?",
+    #             QMessageBox.Yes | QMessageBox.No,
+    #             QMessageBox.No,
+    #         )
+    #         if reply != QMessageBox.Yes:
+    #             event.ignore()
+    #             return
+    #     event.accept()
     # ============================================================
 # ==================== ПЛАН (редактор) ====================
                 
@@ -30217,7 +30238,7 @@ class MainWindow(QMainWindow):
         # дополняет номера будущих встреч            
         for i in range(max_pl // 2 + 1, total_game + 1): 
             with db:
-                results = Result(number_group=stage, system_stage="Финальный", player1="", player2="",
+                results = Result(number_group=stage, system_stage="финальный", player1="", player2="",
                                 tours=i, title_id=self.current_title_id,
                                 system_id=system.id, sex=self.current_sex).save()
 # ===================================
@@ -33569,13 +33590,22 @@ class PlanDialog(QDialog):
         self.placed = {}
         # кэш загрузки из БД
         self.loaded_placed_keys = set()
+        # id встреч, загруженных из БД при открытии (для корректной очистки «удалённых»)
+        self.loaded_res_ids = set()
 
         self.current_match = None
         self.filter_type = "round"
         self._last_sex = "man"
         self._last_date = QDate.currentDate()
 
-        self.setWindowTitle("План соревнования")
+        if read_only:
+            self.setWindowTitle("План соревнования")
+        elif load_from_db:
+            self.setWindowTitle("Редактирование плана соревнования")
+        else:
+            self.setWindowTitle("План соревнования (новый)")
+
+        # self.setWindowTitle("План соревнования")
         self.setModal(True)
         self.setMinimumSize(1100, 640)
 
@@ -33637,11 +33667,29 @@ class PlanDialog(QDialog):
         self.visible_spin.valueChanged.connect(self.on_visible_tables_changed)
         top_bar.addWidget(self.visible_spin)
 
+        # top_bar.addStretch()
+        # if not self.read_only:
+        #     self.add_time_btn = QPushButton("➕ Добавить время")
+        #     self.add_time_btn.clicked.connect(self.on_add_time)
+        #     top_bar.addWidget(self.add_time_btn)
+
+        # left_layout.addLayout(top_bar)
+
         top_bar.addStretch()
         if not self.read_only:
-            self.add_time_btn = QPushButton("➕ Добавить время")
+            self.add_time_btn = QPushButton("➕ Время")
+            self.add_time_btn.setToolTip("Добавить строку времени в текущий день")
             self.add_time_btn.clicked.connect(self.on_add_time)
             top_bar.addWidget(self.add_time_btn)
+
+            self.save_btn = QPushButton("💾 Сохранить")
+            self.save_btn.setToolTip("Сохранить план в расписание")
+            self.save_btn.setStyleSheet(
+                "background-color:#4CAF50; color:white; "
+                "padding:4px 12px; font-weight:bold;"
+            )
+            self.save_btn.clicked.connect(self.save_to_db)
+            top_bar.addWidget(self.save_btn)
 
         left_layout.addLayout(top_bar)
 
@@ -33706,28 +33754,49 @@ class PlanDialog(QDialog):
         outer.addWidget(self.center_widget)
 
         btns = QHBoxLayout()
-        if not self.read_only:
-            save_btn = QPushButton("💾 Сохранить в расписание")
-            save_btn.setStyleSheet(
-                "background-color:#4CAF50; color:white; padding:6px 14px; font-weight:bold;"
-            )
-            save_btn.clicked.connect(self.save_to_db)
-            btns.addWidget(save_btn)
+        # if not self.read_only:
+        #     save_btn = QPushButton("💾 Сохранить в расписание")
+        #     save_btn.setStyleSheet(
+        #         "background-color:#4CAF50; color:white; padding:6px 14px; font-weight:bold;"
+        #     )
+        #     save_btn.clicked.connect(self.save_to_db)
+        #     btns.addWidget(save_btn)
         btns.addStretch()
         close_btn = QPushButton("Закрыть")
-        close_btn.clicked.connect(self.accept)
+        close_btn.clicked.connect(self.close)
         btns.addWidget(close_btn)
         outer.addLayout(btns)
 
     # ------------------------------------------------------------------ Служебное
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == QEvent.WindowStateChange:
-            if self.isMinimized():
-                pass  # окно свернулось
-            elif self.isMaximized() or self.isNormal():
-                # окно вернулось — на всякий случай обновим таблицу
-                QTimer.singleShot(0, self._rebuild_table_headers)
+    # def changeEvent(self, event):
+    #     super().changeEvent(event)
+    #     if event.type() == QEvent.WindowStateChange:
+    #         if self.isMinimized():
+    #             pass  # окно свернулось
+    #         elif self.isMaximized() or self.isNormal():
+    #             # окно вернулось — на всякий случай обновим таблицу
+    #             QTimer.singleShot(0, self._rebuild_table_headers)
+
+    def closeEvent(self, event):
+        if self.read_only:
+            event.accept()
+            return
+        current_ids = {v['res_id'] for v in self.placed.values()}
+        has_changes = (
+            set(self.loaded_res_ids) != current_ids
+            or set(self.placed.keys()) != set(self.loaded_placed_keys)
+        )
+        if has_changes:
+            reply = QMessageBox.question(
+                self, "Несохранённые изменения",
+                "В плане есть несохранённые изменения.\nЗакрыть без сохранения?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+        event.accept()
 
     def _current_sex(self):
         return "man" if self.rb_men.isChecked() else "woman"
@@ -34501,6 +34570,7 @@ class PlanDialog(QDialog):
             }
             self.placed[key] = data
             self.loaded_placed_keys.add(key)
+            self.loaded_res_ids = {res.id for res in saved}
 
             if col <= self.visible_tables:
                 for tr in self.time_rows:
@@ -34517,19 +34587,125 @@ class PlanDialog(QDialog):
             )
 
     # ------------------------------------------------------------------ Сохранение
+    # def save_to_db(self):
+    #     if self.read_only:
+    #         return
+
+    #     # какие ключи сейчас в плане
+    #     current_keys = set(self.placed.keys())
+    #     current_ids = {v['res_id'] for v in self.placed.values()}
+
+    #     # что было загружено, но убрано
+    #     stale_from_loaded = set(self.loaded_placed_keys) - current_keys
+
+    #     # что в БД есть для тех же (этап, пол, группа) и дат, но не в плане
+    #     stale_by_key = set()
+    #     if current_keys:
+    #         dates = {k[0] for k in current_keys}
+    #         new_keys = set()
+    #         for v in self.placed.values():
+    #             res = Result.get_or_none(Result.id == v['res_id'])
+    #             if res:
+    #                 new_keys.add((
+    #                     res.system_stage or "",
+    #                     res.sex or "",
+    #                     res.number_group or "",
+    #                     res.schedule_date,
+    #                     QTime(res.schedule_time.hour, res.schedule_time.minute)
+    #                     if res.schedule_time else None,
+    #                     str(res.schedule_table or ""),
+    #                 ))
+    #         try:
+    #             existing = Result.select().where(
+    #                 (Result.title_id == self.title_id) &
+    #                 (Result.schedule_date.in_(list(dates))) &
+    #                 (Result.schedule_time.is_null(False))
+    #             )
+    #             for res in existing:
+    #                 if res.id in current_ids:
+    #                     continue
+    #                 key = (
+    #                     res.system_stage or "",
+    #                     res.sex or "",
+    #                     res.number_group or "",
+    #                     res.schedule_date,
+    #                     QTime(res.schedule_time.hour, res.schedule_time.minute),
+    #                     str(res.schedule_table or ""),
+    #                 )
+    #                 # удаляем «наши» старые записи только если такой встречи нет в плане
+    #                 if key in new_keys and key not in current_keys:
+    #                     # эту встречу (по res_id) надо снять с расписания
+    #                     if not any(
+    #                         v['res_id'] == res.id for v in self.placed.values()
+    #                     ):
+    #                         stale_by_key.add(res.id)
+    #         except Exception as e:
+    #             print(f"save_to_db: проверка stale_by_key: {e}")
+
+    #     stale_all_ids = {v['res_id'] for v in self.placed.values()}
+    #     stale_all = set(stale_by_key)
+    #     # по id нужно удалить «потерянные» записи — те, что были загружены, но убраны
+    #     for key in stale_from_loaded:
+    #         # key больше не в placed, но нужно найти res_id по загруженному списку
+    #         # проще: сохраняем res_id при загрузке
+    #         pass
+
+    #     # Проще: перезаписываем полностью по всем датам из текущего плана.
+    #     dates = sorted({k[0] for k in current_keys}) or \
+    #             [self.date_edit.date().toPyDate()]
+
+    #     try:
+    #         with db.atomic():
+    #             # 1) снять все прежние назначения на эти даты (только для тех полов/этапов, что есть в плане)
+    #             sexes_in_plan = {v['sex'] for v in self.placed.values()}
+    #             if not sexes_in_plan:
+    #                 sexes_in_plan = {'man', 'woman'}
+
+    #             (Result
+    #              .update(schedule_date=None, schedule_time=None, schedule_table="")
+    #              .where(
+    #                  (Result.title_id == self.title_id) &
+    #                  (Result.schedule_date.in_(dates)) &
+    #                  (Result.sex.in_(list(sexes_in_plan)))
+    #              )
+    #              .execute())
+
+    #             # 2) записать всё из плана
+    #             updated = 0
+    #             for (py_date, qt, col), data in self.placed.items():
+    #                 res = Result.get_or_none(Result.id == data['res_id'])
+    #                 if not res:
+    #                     continue
+    #                 res.schedule_date = py_date
+    #                 res.schedule_time = qt.toPyTime()
+    #                 res.schedule_table = str(col)
+    #                 res.save()
+    #                 updated += 1
+
+    #         self.loaded_placed_keys = set(current_keys)
+    #         QMessageBox.information(
+    #             self, "Успех",
+    #             f"План сохранён.\n"
+    #             f"Дней: {len(dates)}\n"
+    #             f"Встреч размещено: {updated}"
+    #         )
+    #     except Exception as e:
+    #         import traceback
+    #         traceback.print_exc()
+    #         QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить план: {e}")
+
     def save_to_db(self):
         if self.read_only:
             return
 
-        # какие ключи сейчас в плане
         current_keys = set(self.placed.keys())
         current_ids = {v['res_id'] for v in self.placed.values()}
 
-        # что было загружено, но убрано
-        stale_from_loaded = set(self.loaded_placed_keys) - current_keys
+        # 1) были загружены при открытии, но убраны из плана
+        stale_from_loaded_ids = set(self.loaded_res_ids) - current_ids
 
-        # что в БД есть для тех же (этап, пол, группа) и дат, но не в плане
-        stale_by_key = set()
+        # 2) в БД на этих датах есть дубли (тот же этап/пол/группа), которых нет в плане
+        stale_by_key_ids = set()
         if current_keys:
             dates = {k[0] for k in current_keys}
             new_keys = set()
@@ -34562,45 +34738,28 @@ class PlanDialog(QDialog):
                         QTime(res.schedule_time.hour, res.schedule_time.minute),
                         str(res.schedule_table or ""),
                     )
-                    # удаляем «наши» старые записи только если такой встречи нет в плане
                     if key in new_keys and key not in current_keys:
-                        # эту встречу (по res_id) надо снять с расписания
-                        if not any(
-                            v['res_id'] == res.id for v in self.placed.values()
-                        ):
-                            stale_by_key.add(res.id)
+                        if not any(v['res_id'] == res.id for v in self.placed.values()):
+                            stale_by_key_ids.add(res.id)
             except Exception as e:
                 print(f"save_to_db: проверка stale_by_key: {e}")
 
-        stale_all_ids = {v['res_id'] for v in self.placed.values()}
-        stale_all = set(stale_by_key)
-        # по id нужно удалить «потерянные» записи — те, что были загружены, но убраны
-        for key in stale_from_loaded:
-            # key больше не в placed, но нужно найти res_id по загруженному списку
-            # проще: сохраняем res_id при загрузке
-            pass
-
-        # Проще: перезаписываем полностью по всем датам из текущего плана.
+        stale_ids = stale_from_loaded_ids | stale_by_key_ids
         dates = sorted({k[0] for k in current_keys}) or \
                 [self.date_edit.date().toPyDate()]
 
         try:
             with db.atomic():
-                # 1) снять все прежние назначения на эти даты (только для тех полов/этапов, что есть в плане)
-                sexes_in_plan = {v['sex'] for v in self.placed.values()}
-                if not sexes_in_plan:
-                    sexes_in_plan = {'man', 'woman'}
+                # 1) обнулить «потерянные» встречи (загружены — но не в плане)
+                if stale_ids:
+                    (Result
+                    .update(schedule_date=None,
+                            schedule_time=None,
+                            schedule_table="")
+                    .where(Result.id.in_(list(stale_ids)))
+                    .execute())
 
-                (Result
-                 .update(schedule_date=None, schedule_time=None, schedule_table="")
-                 .where(
-                     (Result.title_id == self.title_id) &
-                     (Result.schedule_date.in_(dates)) &
-                     (Result.sex.in_(list(sexes_in_plan)))
-                 )
-                 .execute())
-
-                # 2) записать всё из плана
+                # 2) записать актуальный план
                 updated = 0
                 for (py_date, qt, col), data in self.placed.items():
                     res = Result.get_or_none(Result.id == data['res_id'])
@@ -34612,13 +34771,15 @@ class PlanDialog(QDialog):
                     res.save()
                     updated += 1
 
+            self.loaded_res_ids = set(current_ids)
             self.loaded_placed_keys = set(current_keys)
-            QMessageBox.information(
-                self, "Успех",
-                f"План сохранён.\n"
+
+            msg = (f"План сохранён.\n"
                 f"Дней: {len(dates)}\n"
-                f"Встреч размещено: {updated}"
-            )
+                f"Встреч размещено: {updated}")
+            if stale_ids:
+                msg += f"\nОчищено устаревших: {len(stale_ids)}"
+            QMessageBox.information(self, "Успех", msg)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -35663,272 +35824,6 @@ class ChessboardDialog(QDialog):
             "time_to":   self.time_to_combo.currentData(),
             "tables":    self._parse_tables(self.tables_edit.text()),
         }
-
-   
-
-    # def get_params(self):
-    #     return {
-    #         "date": self.date_edit.date().toPyDate(),
-    #         "time_from": self.time_from.time().toPyTime(),
-    #         "time_to": self.time_to.time().toPyTime(),
-    #         "tables": self.tables_spin.value(),
-    #     }
-
-    # def export_chessboard_pdf(self):
-    #     """Шахматка: время × столы, альбомная A4, одна или несколько страниц."""
-    #     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-    #                                     Paragraph, PageBreak)
-    #     from reportlab.lib.pagesizes import A4, landscape
-    #     from reportlab.lib import colors
-    #     from reportlab.lib.styles import ParagraphStyle as PS
-    #     from reportlab.lib.units import cm
-    #     import os
-    #     import re
-
-    #     if not self.current_title_id:
-    #         QMessageBox.warning(self, "Ошибка", "Сначала выберите соревнование")
-    #         return
-
-    #     # 1) Спрашиваем параметры
-    #     dlg = ChessboardDialog(self)
-    #     if dlg.exec_() != QDialog.Accepted:
-    #         return
-    #     params = dlg.get_params()
-    #     date_ = params["date"]
-    #     t_from = params["time_from"]
-    #     t_to = params["time_to"]
-    #     tables_total = params["tables"]
-
-    #     if t_to <= t_from:
-    #         QMessageBox.warning(self, "Ошибка", "Время «по» должно быть позже «с»")
-    #         return
-
-    #     # 2) Собираем матчи за выбранный день
-    #     matches = (Result
-    #             .select()
-    #             .where(
-    #                 (Result.title_id == self.current_title_id) &
-    #                 (Result.schedule_date == date_)
-    #             )
-    #             .order_by(Result.schedule_time, Result.schedule_table))
-
-    #     # Оставляем только те, что попадают в диапазон времени
-    #     matches = [
-    #         m for m in matches
-    #         if m.schedule_time and t_from <= m.schedule_time <= t_to
-    #     ]
-
-    #     if not matches:
-    #         QMessageBox.information(
-    #             self, "Нет данных",
-    #             f"На {date_.strftime('%d.%m.%Y')} с {t_from.strftime('%H:%M')} "
-    #             f"до {t_to.strftime('%H:%M')} встреч не найдено."
-    #         )
-    #         return
-
-    #     # 3) Определяем все времена и столы
-    #     times_set = sorted({m.schedule_time for m in matches if m.schedule_time})
-    #     tables_set = sorted({int(m.schedule_table) for m in matches
-    #                         if m.schedule_table and str(m.schedule_table).isdigit()})
-
-    #     # Если пользователь указал больше столов, чем есть в данных —
-    #     # всё равно рисуем все запрошенные, но пустые («нет встречи»)
-    #     tables_set = list(range(1, tables_total + 1))
-
-    #     # 4) Строим карту: (время, стол) -> матч
-    #     by_cell = {}
-    #     for m in matches:
-    #         try:
-    #             table_num = int(m.schedule_table)
-    #         except (TypeError, ValueError):
-    #             continue
-    #         by_cell[(m.schedule_time, table_num)] = m
-
-    #     # 5) Папка и имя файла
-    #     pdf_dir = "table_pdf"
-    #     if not os.path.exists(pdf_dir):
-    #         os.makedirs(pdf_dir)
-
-    #     t_id = Title.get(Title.id == self.current_title_id)
-    #     short_name = t_id.short_name_comp or t_id.name
-    #     clean_name = re.sub(r'[\\/*?:"<>|]', "", str(short_name))[:50]
-
-    #     filename = os.path.join(
-    #         pdf_dir,
-    #         f"{clean_name}_chess_{date_.strftime('%Y_%m_%d')}"
-    #         f"_{t_from.strftime('%H%M')}-{t_to.strftime('%H%M')}.pdf"
-    #     )
-
-    #     # 6) Разбивка столов по страницам
-    #     # Сколько столов влезает на альбомную A4: ширина ~ 27 см полезной,
-    #     # под стол ~ 1.8 см + столбец времени ~ 2 см.
-    #     MAX_TABLES_PER_PAGE = 16
-    #     pages = [tables_set[i:i + MAX_TABLES_PER_PAGE]
-    #             for i in range(0, len(tables_set), MAX_TABLES_PER_PAGE)]
-
-    #     # 7) Стили
-    #     styles = getSampleStyleSheet()
-    #     title_style = PS("ChessTitle", fontSize=12,
-    #                     fontName="DejaVuSerif-Bold", alignment=1,
-    #                     spaceAfter=10, textColor=colors.darkblue)
-    #     cell_stage_style = PS("ChessStage", fontSize=7,
-    #                         fontName="DejaVuSerif-Bold", alignment=0,
-    #                         textColor=colors.darkblue, leading=8)
-    #     cell_player_style = PS("ChessPlayer", fontSize=6.5,
-    #                         fontName="DejaVuSerif", alignment=0,
-    #                         textColor=colors.black, leading=7)
-
-    #     elements = []
-
-    #     # 8) Формируем страницы
-    #     for page_idx, tables_page in enumerate(pages):
-    #         title_text = (f"Шахматка на {date_.strftime('%d.%m.%Y')} "
-    #                     f"с {t_from.strftime('%H:%M')} до {t_to.strftime('%H:%M')}")
-    #         if len(pages) > 1:
-    #             title_text += f" (часть {page_idx + 1} из {len(pages)})"
-
-    #         elements.append(Paragraph(title_text, title_style))
-
-    #         # Заголовок: [Время] [Стол 1] [Стол 2] ... [Стол N]
-    #         header = ["Время"] + [f"Стол {t}" for t in tables_page]
-    #         table_data = [header]
-
-    #         # Строки по времени
-    #         for t in times_set:
-    #             row = [t.strftime("%H:%M")]
-    #             for tbl in tables_page:
-    #                 m = by_cell.get((t, tbl))
-    #                 if m is None:
-    #                     row.append("нет встречи")
-    #                 else:
-    #                     stage_short = self._chess_stage_short(m)
-    #                     p1 = self._chess_player_line(m.player1)
-    #                     p2 = self._chess_player_line(m.player2)
-    #                     # Многострочный текст через Paragraph
-    #                     text = (
-    #                         f'<b>{stage_short}</b><br/>'
-    #                         f'{p1}<br/>{p2}'
-    #                     )
-    #                     row.append(Paragraph(text, cell_player_style))
-    #             table_data.append(row)
-
-    #         # Ширина: [2.2 см время] + по 1.7 см на стол
-    #         col_widths = [2.2 * cm] + [1.7 * cm] * len(tables_page)
-    #         tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
-
-    #         tbl.setStyle(TableStyle([
-    #             ('FONTNAME', (0, 0), (-1, 0), 'DejaVuSerif-Bold'),
-    #             ('FONTSIZE', (0, 0), (-1, 0), 8),
-    #             ('BACKGROUND', (0, 0), (-1, 0), colors.lightyellow),
-    #             ('TEXTCOLOR', (0, 0), (-1, 0), colors.darkblue),
-    #             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-    #             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    #             ('FONTNAME', (0, 1), (0, -1), 'DejaVuSerif-Bold'),
-    #             ('FONTSIZE', (0, 1), (0, -1), 8),
-    #             ('BACKGROUND', (0, 1), (0, -1), colors.whitesmoke),
-    #             ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
-    #             ('BOX', (0, 0), (-1, -1), 1, colors.black),
-    #             ('TOPPADDING', (0, 0), (-1, -1), 3),
-    #             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-    #             ('LEFTPADDING', (0, 0), (-1, -1), 3),
-    #             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-    #         ]))
-
-    #         elements.append(tbl)
-    #         if page_idx < len(pages) - 1:
-    #             elements.append(PageBreak())
-
-    #     # 9) Сборка PDF
-    #     doc = SimpleDocTemplate(
-    #         filename, pagesize=landscape(A4),
-    #         rightMargin=1 * cm, leftMargin=1 * cm,
-    #         topMargin=1.5 * cm, bottomMargin=1 * cm,
-    #     )
-    #     doc.build(elements,
-    #             onFirstPage=self.func_zagolovok,
-    #             onLaterPages=self.func_zagolovok)
-
-    #     QMessageBox.information(self, "Успех",
-    #                             f"Шахматка сохранена в:\n{filename}")
-
-    #     reply = QMessageBox.question(self, "Открыть файл",
-    #                                 "Открыть созданный PDF?",
-    #                                 QMessageBox.Yes | QMessageBox.No)
-    #     if reply == QMessageBox.Yes:
-    #         if sys.platform == 'win32':
-    #             os.startfile(filename)
-    #         else:
-    #             os.system(f'open "{filename}"')
-
-    # def _chess_stage_short(self, match):
-    #     """
-    #     Возвращает сокращённое название этапа для ячейки шахматки.
-    #     Например:
-    #     'Квалификация'          -> 'квал. 3 гр.'
-    #     'Квалификация. 1-й полуфинал' -> 'квал. 1-й 1/2'
-    #     '1-й финал'             -> '1-й фин. 2-4'
-    #     """
-    #     stage = (match.system_stage or "").strip()
-    #     group = (match.number_group or "").strip()
-
-    #     # Сокращение этапа
-    #     stage_short = stage
-    #     stage_short = stage_short.replace("Квалификация.", "квал.")
-    #     stage_short = stage_short.replace("Квалификация", "квал.")
-    #     stage_short = stage_short.replace("полуфинал", "1/2")
-    #     stage_short = stage_short.replace("финал", "фин.")
-
-    #     # Сокращение группы
-    #     group_short = ""
-    #     if group:
-    #         # "3 группа" -> "3 гр."
-    #         m = re.match(r"(\d+)\s*группа", group)
-    #         if m:
-    #             group_short = f"{m.group(1)} гр."
-    #         else:
-    #             group_short = group
-
-    #     # Собираем: "квал. 3 гр."
-    #     if group_short:
-    #         return f"{stage_short} {group_short}".strip()
-    #     return stage_short
-    
-    # def _chess_player_line(self, player_str):
-    #     """
-    #     Приводит строку игрока к формату 'Фамилия И./Город'.
-    #     На входе может быть:
-    #     'Иванов Иван'        -> 'Иванов И./'
-    #     'Иванов Иван (Москва)' -> 'Иванов И./Москва'
-    #     'Иванов И. (Москва)' -> 'Иванов И./Москва'
-    #     '' / None            -> ''
-    #     """
-    #     if not player_str:
-    #         return ""
-
-    #     s = str(player_str).strip()
-
-    #     # Город в скобках
-    #     city = ""
-    #     m = re.search(r"\(([^)]+)\)", s)
-    #     if m:
-    #         city = m.group(1).strip()
-    #         s = re.sub(r"\s*\([^)]+\)", "", s).strip()
-
-    #     # Разбиваем на фамилию и имя
-    #     parts = s.split()
-    #     if len(parts) >= 2:
-    #         # 'Иванов Иван' -> 'Иванов И.'
-    #         family = parts[0]
-    #         name_initial = parts[1][0] + "."
-    #         short = f"{family} {name_initial}"
-    #     else:
-    #         short = s
-
-    #     if city:
-    #         return f"{short}/{city}"
-    #     return short    
-
-
 
 def main():  
     # Сначала проверяем БД
