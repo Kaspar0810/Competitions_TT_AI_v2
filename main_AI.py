@@ -79,6 +79,7 @@ from PyPDF2 import PdfMerger
 # В основной программе
 import auto_choice_group
 import manual_choice
+import db_setup
 # ManualNetDrawDialog
 
 from db_setup import setup_database
@@ -98,6 +99,7 @@ class MainWindow(QMainWindow):
             self.check_rating_actual
         else:
             settings.setValue("first_run", False)
+            db_setup.offer_initial_import()
         # # Проверка актуальности рейтинга через 1.5 секунды после запуска
         # QTimer.singleShot(1500, self.check_rating_actual)
 
@@ -8965,9 +8967,6 @@ class MainWindow(QMainWindow):
                     razryad=razryad,
                     title_id=self.current_title_id,
                     sex=sex,
-                    # total_game_player=0,
-                    # total_win_game=0,
-                    # coefficient_victories=0.0,
                     application=application_status,
                     comment="",
                     pay_rejting="",
@@ -13235,9 +13234,6 @@ class MainWindow(QMainWindow):
                     coach_id=deleted.coach_id.id if deleted.coach_id else None,
                     title_id=self.current_title_id,
                     sex=deleted.sex,
-                    # total_game_player=0,
-                    # total_win_game=0,
-                    # coefficient_victories=0.0,
                     application="предварительная",
                     comment=deleted.comment,
                     pay_rejting=deleted.pay_rejting,
@@ -23231,9 +23227,6 @@ class MainWindow(QMainWindow):
                 razryad="",
                 title_id=self.current_title_id,
                 sex="man",
-                # total_game_player=0,
-                # total_win_game=0,
-                # coefficient_victories=0.0,
                 application="",
                 comment="",
                 pay_rejting="",
@@ -23322,9 +23315,6 @@ class MainWindow(QMainWindow):
                 razryad="",
                 title_id=self.current_title_id,
                 sex="man",
-                # total_game_player=0,
-                # total_win_game=0,
-                # coefficient_victories=0.0,
                 application="",
                 comment="",
                 pay_rejting="",
@@ -30320,9 +30310,6 @@ class MainWindow(QMainWindow):
                     razryad="",
                     title_id=self.current_title_id,
                     sex="man",
-                    # total_game_player=0,
-                    # total_win_game=0,
-                    # coefficient_victories=0.0,
                     application="",
                     comment="",
                     pay_rejting="",
