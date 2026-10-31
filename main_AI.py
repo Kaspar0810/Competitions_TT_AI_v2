@@ -13727,13 +13727,16 @@ class MainWindow(QMainWindow):
         # 7. Удаляем Players_double (если есть)
         Players_double.delete().where(Players_double.title_id == title_id).execute()
 
-        # 8. Удаляем GskMember (если есть)
+        # 8. Удаляем Delete_Players (если есть)
+        Delete_player.delete().where(Delete_player.title_id == title_id).execute()
+
+        # 9. Удаляем GskMember (если есть)
         GskMember.delete().where(GskMember.title_id == title_id).execute()
 
-        # 9. Удаляем Choice_Team (если есть)
+        # 10. Удаляем Choice_Team (если есть)
         Choice_Team.delete().where(Choice_Team.title_id == title_id).execute()
 
-        # 10. Наконец, удаляем сам Title
+        # 11. Наконец, удаляем сам Title
         Title.delete().where(Title.id == title_id).execute()
 
     def clear_competition_info(self):
