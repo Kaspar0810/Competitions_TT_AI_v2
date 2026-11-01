@@ -3834,9 +3834,7 @@ class ManualNetDrawDialog(QDialog):
         for p in self.players:
             item = PlayerItem(p)
             self.players_list.addItem(item)
-    # ----------------------------------------------
-    # Цвета четвертей у сетки
-    # ----------------------------------------------
+ 
 class QuarterLineDelegate(QStyledItemDelegate):
     def __init__(self, parent=None, quarter_size=0, max_players=0):
         super().__init__(parent)
