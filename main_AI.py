@@ -91,17 +91,17 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        settings = QSettings("MyOrg", "TT_Competitions")
-        is_first_run = settings.value("first_run", True, type=bool)
+        # settings = QSettings("MyOrg", "TT_Competitions")
+        # is_first_run = settings.value("first_run", True, type=bool)
 
-        if not is_first_run:
-            # self.check_rating_relevance()
-            self.check_rating_actual
-        else:
-            settings.setValue("first_run", False)
-            db_setup.offer_initial_import()
+        # if not is_first_run:
+        #     # self.check_rating_relevance()
+        #     self.check_rating_actual
+        # else:
+        #     settings.setValue("first_run", False)
+        #     db_setup.offer_initial_import()
         # # Проверка актуальности рейтинга через 1.5 секунды после запуска
-        # QTimer.singleShot(1500, self.check_rating_actual)
+        QTimer.singleShot(1500, self.check_rating_actual)
 
         # Проверка старых бэкапов при запуске (через 5 секунды после загрузки)
         QTimer.singleShot(2000, self.check_old_backups_on_startup)
